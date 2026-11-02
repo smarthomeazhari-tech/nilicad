@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>NiliCAD Web Preview</title>
+<title>NiliCAD Web Preview v0.6</title>
 <style>
 :root{color-scheme:dark;--bg:#111820;--panel:#1a2530;--panel2:#202e3b;--line:#344554;--text:#e8eef4;--muted:#9aabba;--accent:#55b7a7;--accent2:#397eae}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font-family:Tahoma,Arial,sans-serif;overflow:hidden}
@@ -86,7 +86,7 @@ html,body{overscroll-behavior:none}#view{touch-action:none}.toolbar{scrollbar-wi
       <select id="draftShape"><option value="rect">مستطیل</option><option value="circle">دایره</option></select>
       <label class="draftMessage">عمق <input id="draftDepth" type="number" value="20" min="0.1" step="1"> mm</label>
       <span class="draftMessage" id="draftSize">—</span>
-      <button id="draftConfirm" class="primary" disabled>ایجاد</button><button id="draftCancel">خروج</button></div>
+      <button id="draftConfirm" class="primary" disabled>تأیید</button><button id="draftCancel">خروج</button></div>
     <div class="viewtools"><button id="topBtn">بالا</button><button id="frontBtn">روبرو</button><button id="isoBtn">ایزومتریک</button></div>
     <div class="hint">محیط آزمایشی تعاملی NiliCAD — واحد: میلی‌متر</div>
     <div class="toast" id="toast"></div>
@@ -260,12 +260,13 @@ document.querySelector('#drawCreate').onclick=()=>{
 };
 
 
-// v0.5: interactive drafting directly on the main WebGL viewport.
+// v0.6: Shapr-style two-stage gesture: sketch drag, then pull handle to extrude directly on the main WebGL viewport.
 // Sketch geometry is projected to the horizontal XZ workplane (top view).
 // Hole is a through-hole preview on the TOP face of an axis-aligned rectangular plate only.
 const overlay=document.querySelector('#sketchOverlay'),pen=overlay.getContext('2d');
 const hud=document.querySelector('#draftHud'),draftShape=document.querySelector('#draftShape');
 let draftMode=null,draftPointer=null,draftA=null,draftB=null,draftTarget=null,draftPlaneY=0;
+let pullStage=false,pullPointer=null,pullStartY=0,pullStartDepth=20;
 const workPlane=new THREE.Plane(new THREE.Vector3(0,1,0),0);
 function overlayResize(){const r=canvas.getBoundingClientRect();overlay.width=Math.max(1,Math.round(r.width*devicePixelRatio));overlay.height=Math.max(1,Math.round(r.height*devicePixelRatio));overlay.style.width=r.width+'px';overlay.style.height=r.height+'px';pen.setTransform(devicePixelRatio,0,0,devicePixelRatio,0,0);draftPaint()}
 new ResizeObserver(overlayResize).observe(canvas);
@@ -279,22 +280,26 @@ function draftPaint(){if(!pen)return;const r=overlay.getBoundingClientRect();pen
  pen.fill();pen.stroke();pen.setLineDash([]);
  document.querySelector('#draftSize').textContent=d?(draftMode==='hole'||draftShape.value==='circle'?`قطر ${d.x.toFixed(1)} mm`:`${d.x.toFixed(1)} × ${d.y.toFixed(1)} mm`):'اندازه را با کشیدن تعیین کنید';
  document.querySelector('#draftConfirm').disabled=!d;
+ if(pullStage&&draftMode!=='hole'&&d){const c=draftShape.value==='circle'?draftA:new THREE.Vector3((draftA.x+draftB.x)/2,draftPlaneY,(draftA.z+draftB.z)/2);const pt=worldToOverlay(c),depth=Number(document.querySelector('#draftDepth').value)||20;pen.setLineDash([]);pen.lineWidth=4;pen.strokeStyle='#ffd37a';pen.beginPath();pen.moveTo(pt.x,pt.y);pen.lineTo(pt.x,pt.y-65);pen.stroke();pen.fillStyle='#ffd37a';pen.beginPath();pen.arc(pt.x,pt.y-65,13,0,Math.PI*2);pen.fill();pen.fillStyle='#111820';pen.font='bold 15px sans-serif';pen.textAlign='center';pen.fillText('↕',pt.x,pt.y-60);document.querySelector('#draftSize').textContent+=` · ارتفاع ${depth.toFixed(1)} mm`;}
+
 }
-function endDraft(){draftMode=null;draftPointer=null;draftA=draftB=null;overlay.classList.remove('active');hud.classList.remove('active');controls.enabled=true;draftPaint()}
-function beginDraft(mode){endDraft();draftMode=mode;draftShape.value=mode==='circle'?'circle':'rect';draftShape.style.display=mode==='hole'?'none':'';draftTarget=null;draftPlaneY=0;
+function endDraft(){pullStage=false;pullPointer=null;draftMode=null;draftPointer=null;draftA=draftB=null;overlay.classList.remove('active');hud.classList.remove('active');controls.enabled=true;draftPaint()}
+function beginDraft(mode){endDraft();draftMode=mode;draftShape.value=mode==='circle'?'circle':'rect';draftShape.style.display=mode==='hole'?'none':'';draftTarget=null;draftPlaneY=0;pullStage=false;
  if(mode==='hole'){
   if(!selected||!['box','extrudeRect','holePlate'].includes(selected.type)||selected.plane&&selected.plane!=='XY') {toast('برای سوراخ‌کاری ابتدا یک صفحه مستطیلی افقی را انتخاب کنید');endDraft();return}
   draftTarget=selected;draftPlaneY=selected.mesh.position.y+selected.dims.z/2;
-  document.querySelector('#draftHelp').textContent='روی سطح بالایی قطعه، مرکز سوراخ را لمس و شعاع را بکشید';
- }else{document.querySelector('#draftHelp').textContent='روی صفحه اصلی بکشید؛ محل و ابعاد با حرکت انگشت مشخص می‌شود'}
+  document.querySelector('#draftHelp').textContent='روی سطح قطعه مرکز سوراخ را لمس و به بیرون بکشید؛ قطر با حرکت انگشت تعیین می‌شود';
+ }else{document.querySelector('#draftHelp').textContent='مستطیل/دایره را روی صفحه بکشید؛ سپس دستگیره زرد ارتفاع را تنظیم می‌کند'}
  overlay.classList.add('active');hud.classList.add('active');controls.enabled=false;setView('top');overlayResize();toast('حالت ترسیم مستقیم فعال شد')}
-overlay.addEventListener('pointerdown',e=>{if(!draftMode||draftPointer!==null)return;const p=projectToPlane(e);if(!p)return;
+overlay.addEventListener('pointerdown',e=>{if(!draftMode||draftPointer!==null)return;
+ if(pullStage&&draftMode!=='hole'){const c=draftShape.value==='circle'?draftA:new THREE.Vector3((draftA.x+draftB.x)/2,draftPlaneY,(draftA.z+draftB.z)/2),q=worldToOverlay(c),pt=screenPt(e);if(Math.hypot(pt.x-q.x,pt.y-(q.y-65))<38){pullPointer=e.pointerId;pullStartY=e.clientY;pullStartDepth=Number(document.querySelector('#draftDepth').value)||20;overlay.setPointerCapture(e.pointerId);e.preventDefault();return;}pullStage=false;draftA=draftB=null;}
+ const p=projectToPlane(e);if(!p)return;
  if(draftMode==='hole'){const localX=p.x-draftTarget.mesh.position.x,localY=-(p.z-draftTarget.mesh.position.z);const limX=draftTarget.dims.x/2,limY=draftTarget.dims.y/2;if(Math.abs(localX)>=limX||Math.abs(localY)>=limY){toast('مرکز سوراخ باید داخل صفحه باشد');return}}
  draftPointer=e.pointerId;overlay.setPointerCapture(e.pointerId);draftA=p.clone();draftB=p.clone();draftPaint();e.preventDefault()});
-overlay.addEventListener('pointermove',e=>{if(e.pointerId!==draftPointer)return;const p=projectToPlane(e);if(p){draftB=p;draftPaint()}e.preventDefault()});
-function draftRelease(e){if(e.pointerId!==draftPointer)return;const p=projectToPlane(e);if(p)draftB=p;draftPointer=null;draftPaint();e.preventDefault()}
+overlay.addEventListener('pointermove',e=>{if(e.pointerId===pullPointer){const val=Math.max(1,Math.min(10000,pullStartDepth+(pullStartY-e.clientY)*0.65));document.querySelector('#draftDepth').value=val.toFixed(1);draftPaint();e.preventDefault();return;}if(e.pointerId!==draftPointer)return;const p=projectToPlane(e);if(p){draftB=p;draftPaint()}e.preventDefault()});
+function draftRelease(e){if(e.pointerId===pullPointer){pullPointer=null;draftPaint();e.preventDefault();return;}if(e.pointerId!==draftPointer)return;const p=projectToPlane(e);if(p)draftB=p;draftPointer=null;if(draftMode!=='hole'&&draftDims()){pullStage=true;document.querySelector('#draftHelp').textContent='دستگیره زرد را به بالا یا پایین بکشید تا ارتفاع تغییر کند؛ سپس تأیید کنید';}draftPaint();e.preventDefault()}
 overlay.addEventListener('pointerup',draftRelease);overlay.addEventListener('pointercancel',()=>{draftPointer=null;draftPaint()});
-draftShape.onchange=()=>draftPaint();document.querySelector('#draftCancel').onclick=endDraft;
+document.querySelector('#draftDepth').addEventListener('input',draftPaint);draftShape.onchange=()=>{pullStage=false;draftPaint()};document.querySelector('#draftCancel').onclick=endDraft;
 document.querySelector('#draftConfirm').onclick=()=>{const d=draftDims();if(!d){toast('ابتدا با انگشت شکل را بکشید');return}
  if(draftMode==='hole'){
   const t=draftTarget,localX=draftA.x-t.mesh.position.x,localY=-(draftA.z-t.mesh.position.z),rad=d.radius;
