@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>NiliCAD Web Preview v0.6</title>
+<title>NiliCAD Web Preview v0.7</title>
 <style>
 :root{color-scheme:dark;--bg:#111820;--panel:#1a2530;--panel2:#202e3b;--line:#344554;--text:#e8eef4;--muted:#9aabba;--accent:#55b7a7;--accent2:#397eae}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font-family:Tahoma,Arial,sans-serif;overflow:hidden}
@@ -55,7 +55,7 @@ html,body{overscroll-behavior:none}#view{touch-action:none}.toolbar{scrollbar-wi
 <body>
 <div class="app">
 <header>
-  <strong>NiliCAD</strong><span class="tag">WEB PREVIEW · v0.6</span>
+  <strong>NiliCAD</strong><span class="tag">WEB PREVIEW · v0.7</span>
   <div class="actions">
     <button id="panelsBtn">قطعات / ابعاد</button><button id="openBtn">بازکردن</button><input type="file" id="fileInput" accept=".json,application/json" hidden><button id="newBtn">پروژه جدید</button><button id="saveBtn">ذخیره</button>
   </div>
@@ -260,13 +260,25 @@ document.querySelector('#drawCreate').onclick=()=>{
 };
 
 
-// v0.6: Shapr-style two-stage gesture: sketch drag, then pull handle to extrude directly on the main WebGL viewport.
+// v0.7: Shapr-style two-stage gesture: sketch drag, then pull handle to extrude directly on the main WebGL viewport.
 // Sketch geometry is projected to the horizontal XZ workplane (top view).
 // Hole is a through-hole preview on the TOP face of an axis-aligned rectangular plate only.
 const overlay=document.querySelector('#sketchOverlay'),pen=overlay.getContext('2d');
 const hud=document.querySelector('#draftHud'),draftShape=document.querySelector('#draftShape');
 let draftMode=null,draftPointer=null,draftA=null,draftB=null,draftTarget=null,draftPlaneY=0;
 let pullStage=false,pullPointer=null,pullStartY=0,pullStartDepth=20;
+let livePreview=null;
+const previewMaterial=new THREE.MeshStandardMaterial({color:0x58d9be,transparent:true,opacity:0.42,depthWrite:false,side:THREE.DoubleSide});
+function clearLivePreview(){if(livePreview){world.remove(livePreview);livePreview.geometry.dispose();livePreview=null}}
+function updateLivePreview(){
+ clearLivePreview();const d=draftDims();if(!d||!draftMode||draftMode==='hole')return;
+ const depth=pullStage?Math.max(0.1,Number(document.querySelector('#draftDepth').value)||20):1;
+ const circle=draftShape.value==='circle';
+ const g=circle?new THREE.CylinderGeometry(d.x/2,d.x/2,depth,64):new THREE.BoxGeometry(d.x,depth,d.y);
+ livePreview=new THREE.Mesh(g,previewMaterial);
+ const c=circle?draftA:new THREE.Vector3((draftA.x+draftB.x)/2,draftPlaneY,(draftA.z+draftB.z)/2);
+ livePreview.position.set(c.x,draftPlaneY+depth/2,c.z);livePreview.renderOrder=3;world.add(livePreview);
+}
 const workPlane=new THREE.Plane(new THREE.Vector3(0,1,0),0);
 function overlayResize(){const r=canvas.getBoundingClientRect();overlay.width=Math.max(1,Math.round(r.width*devicePixelRatio));overlay.height=Math.max(1,Math.round(r.height*devicePixelRatio));overlay.style.width=r.width+'px';overlay.style.height=r.height+'px';pen.setTransform(devicePixelRatio,0,0,devicePixelRatio,0,0);draftPaint()}
 new ResizeObserver(overlayResize).observe(canvas);
@@ -274,7 +286,7 @@ function screenPt(e){const r=overlay.getBoundingClientRect();return {x:e.clientX
 function projectToPlane(e){const r=overlay.getBoundingClientRect();pointer.set((e.clientX-r.left)/r.width*2-1,-((e.clientY-r.top)/r.height*2-1));raycaster.setFromCamera(pointer,camera);workPlane.constant=-draftPlaneY;return raycaster.ray.intersectPlane(workPlane,new THREE.Vector3())}
 function worldToOverlay(v){const q=v.clone().project(camera),r=overlay.getBoundingClientRect();return{x:(q.x+1)*r.width/2,y:(1-q.y)*r.height/2}}
 function draftDims(){if(!draftA||!draftB)return null;const dx=Math.abs(draftB.x-draftA.x),dz=Math.abs(draftB.z-draftA.z);if(draftMode==='hole'||draftShape.value==='circle'){const radius=Math.hypot(draftB.x-draftA.x,draftB.z-draftA.z);return radius>0.5?{x:radius*2,y:radius*2,radius}:null}return dx>0.5&&dz>0.5?{x:dx,y:dz}:null}
-function draftPaint(){if(!pen)return;const r=overlay.getBoundingClientRect();pen.clearRect(0,0,r.width,r.height);if(!draftMode)return;
+function draftPaint(){updateLivePreview();if(!pen)return;const r=overlay.getBoundingClientRect();pen.clearRect(0,0,r.width,r.height);if(!draftMode)return;
  if(!draftA||!draftB)return;const a=worldToOverlay(draftA),b=worldToOverlay(draftB),d=draftDims();pen.lineWidth=2.5;pen.strokeStyle='#67f7d2';pen.fillStyle='#32cfac33';pen.setLineDash([7,4]);pen.beginPath();
  if(draftMode==='hole'||draftShape.value==='circle'){const edge=new THREE.Vector3(draftB.x,draftPlaneY,draftB.z);const rad=Math.hypot(b.x-a.x,b.y-a.y);pen.arc(a.x,a.y,rad,0,Math.PI*2)}else{const p1=worldToOverlay(new THREE.Vector3(draftA.x,draftPlaneY,draftB.z)),p2=worldToOverlay(new THREE.Vector3(draftB.x,draftPlaneY,draftA.z));pen.moveTo(a.x,a.y);pen.lineTo(p2.x,p2.y);pen.lineTo(b.x,b.y);pen.lineTo(p1.x,p1.y);pen.closePath()}
  pen.fill();pen.stroke();pen.setLineDash([]);
@@ -283,14 +295,14 @@ function draftPaint(){if(!pen)return;const r=overlay.getBoundingClientRect();pen
  if(pullStage&&draftMode!=='hole'&&d){const c=draftShape.value==='circle'?draftA:new THREE.Vector3((draftA.x+draftB.x)/2,draftPlaneY,(draftA.z+draftB.z)/2);const pt=worldToOverlay(c),depth=Number(document.querySelector('#draftDepth').value)||20;pen.setLineDash([]);pen.lineWidth=4;pen.strokeStyle='#ffd37a';pen.beginPath();pen.moveTo(pt.x,pt.y);pen.lineTo(pt.x,pt.y-65);pen.stroke();pen.fillStyle='#ffd37a';pen.beginPath();pen.arc(pt.x,pt.y-65,13,0,Math.PI*2);pen.fill();pen.fillStyle='#111820';pen.font='bold 15px sans-serif';pen.textAlign='center';pen.fillText('↕',pt.x,pt.y-60);document.querySelector('#draftSize').textContent+=` · ارتفاع ${depth.toFixed(1)} mm`;}
 
 }
-function endDraft(){pullStage=false;pullPointer=null;draftMode=null;draftPointer=null;draftA=draftB=null;overlay.classList.remove('active');hud.classList.remove('active');controls.enabled=true;draftPaint()}
+function endDraft(){clearLivePreview();pullStage=false;pullPointer=null;draftMode=null;draftPointer=null;draftA=draftB=null;overlay.classList.remove('active');hud.classList.remove('active');controls.enabled=true;draftPaint()}
 function beginDraft(mode){endDraft();draftMode=mode;draftShape.value=mode==='circle'?'circle':'rect';draftShape.style.display=mode==='hole'?'none':'';draftTarget=null;draftPlaneY=0;pullStage=false;
  if(mode==='hole'){
   if(!selected||!['box','extrudeRect','holePlate'].includes(selected.type)||selected.plane&&selected.plane!=='XY') {toast('برای سوراخ‌کاری ابتدا یک صفحه مستطیلی افقی را انتخاب کنید');endDraft();return}
   draftTarget=selected;draftPlaneY=selected.mesh.position.y+selected.dims.z/2;
   document.querySelector('#draftHelp').textContent='روی سطح قطعه مرکز سوراخ را لمس و به بیرون بکشید؛ قطر با حرکت انگشت تعیین می‌شود';
- }else{document.querySelector('#draftHelp').textContent='مستطیل/دایره را روی صفحه بکشید؛ سپس دستگیره زرد ارتفاع را تنظیم می‌کند'}
- overlay.classList.add('active');hud.classList.add('active');controls.enabled=false;setView('top');overlayResize();toast('حالت ترسیم مستقیم فعال شد')}
+ }else{document.querySelector('#draftHelp').textContent='در نمای سه‌بعدی روی صفحه کاری بکشید؛ حجم نیمه‌شفاف را ببینید و دستگیره ارتفاع را تغییر دهید'}
+ overlay.classList.add('active');hud.classList.add('active');controls.enabled=false;overlayResize();toast('ترسیم در نمای سه‌بعدی فعال شد')}
 overlay.addEventListener('pointerdown',e=>{if(!draftMode||draftPointer!==null)return;
  if(pullStage&&draftMode!=='hole'){const c=draftShape.value==='circle'?draftA:new THREE.Vector3((draftA.x+draftB.x)/2,draftPlaneY,(draftA.z+draftB.z)/2),q=worldToOverlay(c),pt=screenPt(e);if(Math.hypot(pt.x-q.x,pt.y-(q.y-65))<38){pullPointer=e.pointerId;pullStartY=e.clientY;pullStartDepth=Number(document.querySelector('#draftDepth').value)||20;overlay.setPointerCapture(e.pointerId);e.preventDefault();return;}pullStage=false;draftA=draftB=null;}
  const p=projectToPlane(e);if(!p)return;
