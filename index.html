@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>NiliCAD Web Preview v0.7</title>
+<title>NiliCAD Web Preview v0.8</title>
 <style>
 :root{color-scheme:dark;--bg:#111820;--panel:#1a2530;--panel2:#202e3b;--line:#344554;--text:#e8eef4;--muted:#9aabba;--accent:#55b7a7;--accent2:#397eae}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font-family:Tahoma,Arial,sans-serif;overflow:hidden}
@@ -55,7 +55,7 @@ html,body{overscroll-behavior:none}#view{touch-action:none}.toolbar{scrollbar-wi
 <body>
 <div class="app">
 <header>
-  <strong>NiliCAD</strong><span class="tag">WEB PREVIEW · v0.7</span>
+  <strong>NiliCAD</strong><span class="tag">WEB PREVIEW · v0.8</span>
   <div class="actions">
     <button id="panelsBtn">قطعات / ابعاد</button><button id="openBtn">بازکردن</button><input type="file" id="fileInput" accept=".json,application/json" hidden><button id="newBtn">پروژه جدید</button><button id="saveBtn">ذخیره</button>
   </div>
@@ -205,7 +205,7 @@ document.querySelector('#topBtn').onclick=()=>setView('top');document.querySelec
 document.querySelector('#newBtn').onclick=()=>{if(!confirm('پروژه فعلی پاک شود؟'))return;items.forEach(o=>{world.remove(o.mesh);o.mesh.geometry.dispose()});items=[];select(null);refreshList();nextId=1;history=[];redoStack=[];toast('پروژه جدید آماده است')};
 document.querySelector('#undoBtn').onclick=()=>{if(!history.length){toast('عملیاتی برای بازگشت نیست');return}redoStack.push(state());restore(history.pop());toast('Undo انجام شد')};
 document.querySelector('#redoBtn').onclick=()=>{if(!redoStack.length){toast('عملیاتی برای تکرار نیست');return}history.push(state());restore(redoStack.pop());toast('Redo انجام شد')};
-document.querySelector('#saveBtn').onclick=()=>{const data={format:'NiliCAD-Web',version:'0.5',units:'mm',objects:items.map(o=>({id:o.id,name:o.name,type:o.type,dimensions:o.dims,plane:o.plane||'XY',position:o.mesh.position.toArray()}))};download(new Blob([JSON.stringify(data,null,2)],{type:'application/json'}),'project.nilicad.json');toast('فایل پروژه ذخیره شد')};
+document.querySelector('#saveBtn').onclick=()=>{const data={format:'NiliCAD-Web',version:'0.8',units:'mm',objects:items.map(o=>({id:o.id,name:o.name,type:o.type,dimensions:o.dims,plane:o.plane||'XY',position:o.mesh.position.toArray()}))};download(new Blob([JSON.stringify(data,null,2)],{type:'application/json'}),'project.nilicad.json');toast('فایل پروژه ذخیره شد')};
 const skDlg=document.querySelector('#sketchDialog');
 document.querySelector('#sketchBtn').onclick=()=>skDlg.showModal();
 document.querySelector('#skCancel').onclick=()=>skDlg.close();
@@ -260,13 +260,14 @@ document.querySelector('#drawCreate').onclick=()=>{
 };
 
 
-// v0.7: Shapr-style two-stage gesture: sketch drag, then pull handle to extrude directly on the main WebGL viewport.
+// v0.8: Shapr-style two-stage gesture: sketch drag, then pull handle to extrude directly on the main WebGL viewport.
 // Sketch geometry is projected to the horizontal XZ workplane (top view).
 // Hole is a through-hole preview on the TOP face of an axis-aligned rectangular plate only.
 const overlay=document.querySelector('#sketchOverlay'),pen=overlay.getContext('2d');
 const hud=document.querySelector('#draftHud'),draftShape=document.querySelector('#draftShape');
 let draftMode=null,draftPointer=null,draftA=null,draftB=null,draftTarget=null,draftPlaneY=0;
 let pullStage=false,pullPointer=null,pullStartY=0,pullStartDepth=20;
+let draftReady=false, draftDownPoint=null;
 let livePreview=null;
 const previewMaterial=new THREE.MeshStandardMaterial({color:0x58d9be,transparent:true,opacity:0.42,depthWrite:false,side:THREE.DoubleSide});
 function clearLivePreview(){if(livePreview){world.remove(livePreview);livePreview.geometry.dispose();livePreview=null}}
@@ -295,24 +296,34 @@ function draftPaint(){updateLivePreview();if(!pen)return;const r=overlay.getBoun
  if(pullStage&&draftMode!=='hole'&&d){const c=draftShape.value==='circle'?draftA:new THREE.Vector3((draftA.x+draftB.x)/2,draftPlaneY,(draftA.z+draftB.z)/2);const pt=worldToOverlay(c),depth=Number(document.querySelector('#draftDepth').value)||20;pen.setLineDash([]);pen.lineWidth=4;pen.strokeStyle='#ffd37a';pen.beginPath();pen.moveTo(pt.x,pt.y);pen.lineTo(pt.x,pt.y-65);pen.stroke();pen.fillStyle='#ffd37a';pen.beginPath();pen.arc(pt.x,pt.y-65,13,0,Math.PI*2);pen.fill();pen.fillStyle='#111820';pen.font='bold 15px sans-serif';pen.textAlign='center';pen.fillText('↕',pt.x,pt.y-60);document.querySelector('#draftSize').textContent+=` · ارتفاع ${depth.toFixed(1)} mm`;}
 
 }
-function endDraft(){clearLivePreview();pullStage=false;pullPointer=null;draftMode=null;draftPointer=null;draftA=draftB=null;overlay.classList.remove('active');hud.classList.remove('active');controls.enabled=true;draftPaint()}
+function endDraft(){draftReady=false;draftDownPoint=null;document.querySelector('#draftConfirm').disabled=true;clearLivePreview();pullStage=false;pullPointer=null;draftMode=null;draftPointer=null;draftA=draftB=null;overlay.classList.remove('active');hud.classList.remove('active');controls.enabled=true;draftPaint()}
 function beginDraft(mode){endDraft();draftMode=mode;draftShape.value=mode==='circle'?'circle':'rect';draftShape.style.display=mode==='hole'?'none':'';draftTarget=null;draftPlaneY=0;pullStage=false;
  if(mode==='hole'){
   if(!selected||!['box','extrudeRect','holePlate'].includes(selected.type)||selected.plane&&selected.plane!=='XY') {toast('برای سوراخ‌کاری ابتدا یک صفحه مستطیلی افقی را انتخاب کنید');endDraft();return}
   draftTarget=selected;draftPlaneY=selected.mesh.position.y+selected.dims.z/2;
-  document.querySelector('#draftHelp').textContent='روی سطح قطعه مرکز سوراخ را لمس و به بیرون بکشید؛ قطر با حرکت انگشت تعیین می‌شود';
+  document.querySelector('#draftHelp').textContent='روی سطح قطعه مرکز سوراخ را لمس و به بیرون بکشید؛ قطر با حرکت انگشت تعیین می‌شود؛ سپس فضای خالی را لمس کنید تا سوراخ ایجاد شود';
  }else{document.querySelector('#draftHelp').textContent='در نمای سه‌بعدی روی صفحه کاری بکشید؛ حجم نیمه‌شفاف را ببینید و دستگیره ارتفاع را تغییر دهید'}
  overlay.classList.add('active');hud.classList.add('active');controls.enabled=false;overlayResize();toast('ترسیم در نمای سه‌بعدی فعال شد')}
 overlay.addEventListener('pointerdown',e=>{if(!draftMode||draftPointer!==null)return;
+ if(draftReady&&draftDims()){
+  const pt=screenPt(e);
+  const isHandle=pullStage&&draftMode!=='hole'&&(()=>{const c=draftShape.value==='circle'?draftA:new THREE.Vector3((draftA.x+draftB.x)/2,draftPlaneY,(draftA.z+draftB.z)/2),q=worldToOverlay(c);return Math.hypot(pt.x-q.x,pt.y-(q.y-65))<38})();
+  if(!isHandle){
+   const r=overlay.getBoundingClientRect();pointer.set(pt.x/r.width*2-1,-(pt.y/r.height*2-1));raycaster.setFromCamera(pointer,camera);
+   const hits=raycaster.intersectObjects(items.map(o=>o.mesh),false);
+   if(!hits.length){draftDownPoint={id:e.pointerId,x:e.clientX,y:e.clientY};overlay.setPointerCapture(e.pointerId);e.preventDefault();return;}
+   toast('برای تأیید، فضای خالی خارج از قطعه را لمس کنید');e.preventDefault();return;
+  }
+ }
  if(pullStage&&draftMode!=='hole'){const c=draftShape.value==='circle'?draftA:new THREE.Vector3((draftA.x+draftB.x)/2,draftPlaneY,(draftA.z+draftB.z)/2),q=worldToOverlay(c),pt=screenPt(e);if(Math.hypot(pt.x-q.x,pt.y-(q.y-65))<38){pullPointer=e.pointerId;pullStartY=e.clientY;pullStartDepth=Number(document.querySelector('#draftDepth').value)||20;overlay.setPointerCapture(e.pointerId);e.preventDefault();return;}pullStage=false;draftA=draftB=null;}
  const p=projectToPlane(e);if(!p)return;
  if(draftMode==='hole'){const localX=p.x-draftTarget.mesh.position.x,localY=-(p.z-draftTarget.mesh.position.z);const limX=draftTarget.dims.x/2,limY=draftTarget.dims.y/2;if(Math.abs(localX)>=limX||Math.abs(localY)>=limY){toast('مرکز سوراخ باید داخل صفحه باشد');return}}
  draftPointer=e.pointerId;overlay.setPointerCapture(e.pointerId);draftA=p.clone();draftB=p.clone();draftPaint();e.preventDefault()});
-overlay.addEventListener('pointermove',e=>{if(e.pointerId===pullPointer){const val=Math.max(1,Math.min(10000,pullStartDepth+(pullStartY-e.clientY)*0.65));document.querySelector('#draftDepth').value=val.toFixed(1);draftPaint();e.preventDefault();return;}if(e.pointerId!==draftPointer)return;const p=projectToPlane(e);if(p){draftB=p;draftPaint()}e.preventDefault()});
-function draftRelease(e){if(e.pointerId===pullPointer){pullPointer=null;draftPaint();e.preventDefault();return;}if(e.pointerId!==draftPointer)return;const p=projectToPlane(e);if(p)draftB=p;draftPointer=null;if(draftMode!=='hole'&&draftDims()){pullStage=true;document.querySelector('#draftHelp').textContent='دستگیره زرد را به بالا یا پایین بکشید تا ارتفاع تغییر کند؛ سپس تأیید کنید';}draftPaint();e.preventDefault()}
+overlay.addEventListener('pointermove',e=>{if(draftDownPoint&&e.pointerId===draftDownPoint.id){e.preventDefault();return;}if(e.pointerId===pullPointer){const val=Math.max(1,Math.min(10000,pullStartDepth+(pullStartY-e.clientY)*0.65));document.querySelector('#draftDepth').value=val.toFixed(1);draftPaint();e.preventDefault();return;}if(e.pointerId!==draftPointer)return;const p=projectToPlane(e);if(p){draftB=p;draftPaint()}e.preventDefault()});
+function draftRelease(e){if(draftDownPoint&&e.pointerId===draftDownPoint.id){const tap=Math.hypot(e.clientX-draftDownPoint.x,e.clientY-draftDownPoint.y)<14;draftDownPoint=null;if(tap)commitDraft();e.preventDefault();return;}if(e.pointerId===pullPointer){pullPointer=null;draftPaint();e.preventDefault();return;}if(e.pointerId!==draftPointer)return;const p=projectToPlane(e);if(p)draftB=p;draftPointer=null;if(draftDims())draftReady=true;if(draftMode!=='hole'&&draftDims()){pullStage=true;document.querySelector('#draftHelp').textContent='دستگیره زرد را به بالا یا پایین بکشید تا ارتفاع تغییر کند؛ سپس فضای خالی صفحه را لمس کنید تا تأیید شود';}draftPaint();e.preventDefault()}
 overlay.addEventListener('pointerup',draftRelease);overlay.addEventListener('pointercancel',()=>{draftPointer=null;draftPaint()});
 document.querySelector('#draftDepth').addEventListener('input',draftPaint);draftShape.onchange=()=>{pullStage=false;draftPaint()};document.querySelector('#draftCancel').onclick=endDraft;
-document.querySelector('#draftConfirm').onclick=()=>{const d=draftDims();if(!d){toast('ابتدا با انگشت شکل را بکشید');return}
+function commitDraft(){const d=draftDims();if(!d){toast('ابتدا با انگشت شکل را بکشید');return}
  if(draftMode==='hole'){
   const t=draftTarget,localX=draftA.x-t.mesh.position.x,localY=-(draftA.z-t.mesh.position.z),rad=d.radius;
   if(rad+Math.abs(localX)>=t.dims.x/2||rad+Math.abs(localY)>=t.dims.y/2){toast('سوراخ باید کاملاً داخل صفحه قرار بگیرد');return}
@@ -321,7 +332,8 @@ document.querySelector('#draftConfirm').onclick=()=>{const d=draftDims();if(!d){
  const depth=Number(document.querySelector('#draftDepth').value);if(!Number.isFinite(depth)||depth<=0||depth>10000){toast('عمق Extrude نامعتبر است');return}
  const circle=draftShape.value==='circle';const center=circle?draftA.clone():new THREE.Vector3((draftA.x+draftB.x)/2,0,(draftA.z+draftB.z)/2);
  addObject(circle?'extrudeCircle':'extrudeRect',{x:d.x,y:d.y,z:depth},'Sketch '+nextId);selected.mesh.position.set(center.x,depth/2,center.z);selected.plane='XY';endDraft();toast('قطعه در محل ترسیم ایجاد شد')
-};
+}
+document.querySelector('#draftConfirm').onclick=commitDraft;
 
 document.querySelector('#stlBtn').onclick=()=>{if(!items.length){toast('ابتدا یک قطعه بسازید');return}const exporter=new STLExporter();const result=exporter.parse(world,{binary:true});download(new Blob([result],{type:'application/octet-stream'}),'NiliCAD-model.stl');toast('خروجی STL آماده شد')};
 function download(blob,name){const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),30000)}
