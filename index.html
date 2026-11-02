@@ -212,7 +212,7 @@ function directionalHoleGeometry(d){
 }
 function geometry(type,d){if(type==='directionalHole')return directionalHoleGeometry(d);if(['holePlate','filletPlate','chamferPlate'].includes(type))return profileGeometry(type,d);if(type==='box')return new THREE.BoxGeometry(d.x,d.z,d.y);if(type==='extrudeRect')return new THREE.BoxGeometry(d.x,d.z,d.y);if(type==='extrudeCircle')return new THREE.CylinderGeometry(d.x/2,d.x/2,d.z,64);if(type==='cylinder')return new THREE.CylinderGeometry(d.x/2,d.x/2,d.z,48);if(type==='cone')return new THREE.CylinderGeometry(0,d.x/2,d.z,48);if(type==='hexPrism')return new THREE.CylinderGeometry(d.x/2,d.x/2,d.z,6);return new THREE.SphereGeometry(d.x/2,40,28)}
 function addObject(type='box',dims={x:40,y:30,z:20},name){snapshot();const id=nextId++;const mesh=new THREE.Mesh(geometry(type,dims),mat.clone());mesh.castShadow=true;mesh.receiveShadow=true;mesh.position.set((items.length%3)*55, dims.z/2,Math.floor(items.length/3)*45);mesh.userData.objectId=id;world.add(mesh);const obj={id,name:name||({box:'مکعب',cylinder:'استوانه',sphere:'کره',cone:'مخروط',hexPrism:'شش‌ضلعی'}[type])+' '+id,type,dims:{...dims},mesh};items.push(obj);select(obj);refreshList();toast('قطعه ایجاد شد');}
-function select(obj){if(gizmoMode){gizmo.detach();if(obj)gizmo.attach(obj.mesh)}if(selected)selected.mesh.material=mat.clone();selected=obj;if(selected)selected.mesh.material=selectedMat;document.querySelector('#emptyProps').hidden=!!obj;document.querySelector('#props').hidden=!obj;if(obj){document.querySelector('#objName').value=obj.name;['x','y','z'].forEach(k=>document.querySelector('#dim'+k.toUpperCase()).value=obj.dims[k]);['X','Y','Z'].forEach((k,i)=>document.querySelector('#pos'+k).value=obj.mesh.position.getComponent(i).toFixed(2));document.querySelector('#statusText').textContent='انتخاب: '+obj.name+' · '+obj.type;}else document.querySelector('#statusText').textContent='آماده · هیچ قطعه‌ای انتخاب نشده';refreshList();if(typeof updateDirectPalette==='function')updateDirectPalette();}
+function select(obj){if(gizmoMode){gizmo.detach();if(obj)gizmo.attach(obj.mesh)}if(selected)selected.mesh.material=mat.clone();selected=obj;if(selected)selected.mesh.material=selectedMat;document.querySelector('#emptyProps').hidden=!!obj;document.querySelector('#props').hidden=!obj;if(obj){document.querySelector('#objName').value=obj.name;['x','y','z'].forEach(k=>document.querySelector('#dim'+k.toUpperCase()).value=obj.dims[k]);['X','Y','Z'].forEach((k,i)=>document.querySelector('#pos'+k).value=obj.mesh.position.getComponent(i).toFixed(2));document.querySelector('#statusText').textContent='انتخاب: '+obj.name+' · '+obj.type;}else document.querySelector('#statusText').textContent='آماده · هیچ قطعه‌ای انتخاب نشده';refreshList();if(typeof directPaletteReady!=='undefined' && directPaletteReady)updateDirectPalette();}
 function refreshList(){document.querySelector('#count').textContent=items.length;const list=document.querySelector('#objectList');list.innerHTML='';items.forEach(o=>{const el=document.createElement('div');el.className='treeitem'+(selected===o?' selected':'');const nm=document.createElement('span');nm.textContent='◇ '+o.name;const typ=document.createElement('small');typ.textContent=o.type;el.append(nm,typ);el.onclick=()=>select(o);list.appendChild(el);});}
 function rebuild(o){const old=o.mesh;world.remove(old);old.geometry.dispose();const mesh=new THREE.Mesh(geometry(o.type,o.dims),selected===o?selectedMat:mat.clone());mesh.position.copy(old.position);mesh.rotation.copy(old.rotation);mesh.scale.copy(old.scale);mesh.userData.objectId=o.id;mesh.castShadow=true;mesh.receiveShadow=true;o.mesh=mesh;world.add(mesh);}
 function resize(){const w=canvas.clientWidth,h=canvas.clientHeight;if(!w||!h)return;renderer.setSize(w,h,false);camera.aspect=w/h;camera.updateProjectionMatrix();}
@@ -391,6 +391,7 @@ function download(blob,name){const url=URL.createObjectURL(blob),a=document.crea
 addObject('box',{x:60,y:40,z:20},'Base Plate');
 
 // Direct in-scene interaction: selection exposes contextual actions near the solid.
+let directPaletteReady=false;
 const directPalette=document.getElementById('directPalette');
 const directHint=document.getElementById('directHint');
 let directHidden=false;
@@ -432,6 +433,7 @@ canvas.addEventListener('pointerup',e=>{
 let paletteFrame=0;
 function followDirectPalette(){if((paletteFrame++%3)===0)updateDirectPalette();requestAnimationFrame(followDirectPalette)}
 followDirectPalette();
+directPaletteReady=true;
 const oldDirectSelect=select;
 select=function(obj){directHidden=false;oldDirectSelect(obj);updateDirectPalette();if(obj){directHint.textContent='دستگیره‌ها را روی خود قطعه بکشید؛ برای سوراخ، گزینه کنار قطعه را لمس کنید'}else{directHint.textContent='روی یک حجم لمس کنید؛ ابزارها کنار همان حجم ظاهر می‌شوند'}};
 </script>
