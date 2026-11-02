@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>NiliCAD Web Preview v1.1</title>
+<title>NiliCAD Web Preview v1.3</title>
 <style>
 :root{color-scheme:dark;--bg:#111820;--panel:#1a2530;--panel2:#202e3b;--line:#344554;--text:#e8eef4;--muted:#9aabba;--accent:#55b7a7;--accent2:#397eae}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font-family:Tahoma,Arial,sans-serif;overflow:hidden}
@@ -53,6 +53,24 @@ html,body{overscroll-behavior:none}#view{touch-action:none}.toolbar{scrollbar-wi
 #directPalette button{padding:9px 10px;border-radius:8px;min-height:40px;font-size:12px}
 #directPalette button.active{background:#236d71;color:white}
 #directHint{position:absolute;z-index:5;bottom:42px;left:50%;transform:translateX(-50%);pointer-events:none;background:#101c27d9;padding:8px 12px;border-radius:9px;font-size:12px;white-space:nowrap;max-width:94%;overflow:hidden;text-overflow:ellipsis}
+
+/* Touch-first contextual tool dock, inspired by direct CAD workflows */
+.toolbar{display:none!important}
+.app{grid-template-rows:56px 1fr 28px}
+@media(max-width:850px){.app{grid-template-rows:52px 1fr 28px}}
+@media(max-width:600px){.app{grid-template-rows:50px 1fr 25px}}
+#cadDock{position:absolute;z-index:8;bottom:52px;left:50%;transform:translateX(-50%);width:max-content;max-width:calc(100% - 16px);display:flex;gap:6px;align-items:center;padding:8px;border-radius:17px;background:#101c27f5;border:1px solid #587080;box-shadow:0 8px 30px #0009;direction:rtl;overflow-x:auto;scrollbar-width:none}
+#cadDock button{min-width:60px;min-height:53px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;font-size:11px;padding:6px 9px;border-radius:11px}
+#cadDock button .sym{font-size:20px;line-height:22px}
+#cadDock button.active{background:#1b605d;border-color:#5dc0ac}
+#cadDock .dockDivider{width:1px;align-self:stretch;background:#4c5e6b;flex:none}
+#cadMore{position:absolute;z-index:9;bottom:119px;left:50%;transform:translateX(-50%);display:none;flex-wrap:wrap;gap:7px;max-width:calc(100% - 20px);padding:10px;background:#152431f7;border:1px solid #587080;border-radius:13px;justify-content:center;box-shadow:0 10px 28px #000a}
+#cadMore.open{display:flex}
+#cadMore button{min-height:42px}
+#directPalette{display:none!important}
+#directHint{bottom:118px;max-width:90%;white-space:normal;text-align:center}
+#draftHud{top:8px}
+@media(max-width:600px){#cadDock{bottom:35px}#cadDock button{min-width:52px;padding:6px}#cadMore{bottom:98px}#directHint{bottom:100px;font-size:10px}}
 </style>
 <script type="importmap">
 {"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.164.1/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.164.1/examples/jsm/"}}
@@ -61,7 +79,7 @@ html,body{overscroll-behavior:none}#view{touch-action:none}.toolbar{scrollbar-wi
 <body>
 <div class="app">
 <header>
-  <strong>NiliCAD</strong><span class="tag">WEB PREVIEW · v1.2 · Direct Modeling</span>
+  <strong>NiliCAD</strong><span class="tag">WEB PREVIEW · v1.3 · Context Tools</span>
   <div class="actions">
     <button id="panelsBtn">قطعات / ابعاد</button><button id="openBtn">بازکردن</button><input type="file" id="fileInput" accept=".json,application/json" hidden><button id="newBtn">پروژه جدید</button><button id="saveBtn">ذخیره</button>
   </div>
@@ -88,6 +106,9 @@ html,body{overscroll-behavior:none}#view{touch-action:none}.toolbar{scrollbar-wi
   <section class="viewport">
 <div id="directPalette"><button data-act="translate">↔ حرکت</button><button data-act="rotate">⟳ چرخش</button><button data-act="scale">⤢ اندازه</button><button data-act="hole">◉ سوراخ</button><button data-act="copy">⧉ کپی</button><button data-act="delete">⌫ حذف</button><button data-act="close">×</button></div><div id="directHint">روی یک حجم لمس کنید؛ ابزارها کنار همان حجم ظاهر می‌شوند</div>
     <canvas id="view"></canvas>
+<div id="cadMore" aria-label="ابزارهای بیشتر"><button data-tool="box">مکعب</button><button data-tool="cyl">استوانه</button><button data-tool="sphere">کره</button><button data-tool="cone">مخروط</button><button data-tool="hex">شش‌ضلعی</button><button data-tool="fillet">Fillet</button><button data-tool="chamfer">Chamfer</button><button data-tool="stl">STL</button><button data-tool="undo">Undo</button><button data-tool="redo">Redo</button></div>
+<div id="cadDock" aria-label="ابزارهای انتخابی طراحی"><button data-tool="sketch"><span class="sym">✎</span>ترسیم</button><button data-tool="circle"><span class="sym">◯</span>دایره</button><button data-tool="hole"><span class="sym">◎</span>سوراخ</button><span class="dockDivider"></span><button data-tool="move"><span class="sym">✥</span>حرکت</button><button data-tool="rotate"><span class="sym">⟳</span>چرخش</button><button data-tool="copy"><span class="sym">▣</span>کپی</button><button data-tool="delete"><span class="sym">⌫</span>حذف</button><button data-tool="more"><span class="sym">⋯</span>بیشتر</button></div>
+
     <canvas id="sketchOverlay" aria-label="ترسیم مستقیم روی مدل"></canvas>
     <div id="draftHud"><span class="draftMessage" id="draftHelp">با انگشت روی صفحه بکشید</span>
       <select id="draftShape"><option value="rect">مستطیل</option><option value="circle">دایره</option></select>
@@ -436,6 +457,35 @@ followDirectPalette();
 directPaletteReady=true;
 const oldDirectSelect=select;
 select=function(obj){directHidden=false;oldDirectSelect(obj);updateDirectPalette();if(obj){directHint.textContent='دستگیره‌ها را روی خود قطعه بکشید؛ برای سوراخ، گزینه کنار قطعه را لمس کنید'}else{directHint.textContent='روی یک حجم لمس کنید؛ ابزارها کنار همان حجم ظاهر می‌شوند'}};
+
+// Context-sensitive dock: all actions dispatch to existing, tested command handlers.
+const cadDock=document.getElementById('cadDock');
+const cadMore=document.getElementById('cadMore');
+const toolMap={box:'boxBtn',cyl:'cylBtn',sphere:'sphereBtn',cone:'coneBtn',hex:'hexBtn',fillet:'filletBtn',chamfer:'chamferBtn',stl:'stlBtn',undo:'undoBtn',redo:'redoBtn',copy:'copyBtn',delete:'deleteBtn'};
+function refreshCadDock(){
+ const has=!!selected;
+ cadDock.querySelectorAll('[data-tool]').forEach(b=>{
+  const a=b.dataset.tool;
+  b.disabled=['move','rotate','copy','delete','hole'].includes(a)&&!has;
+  b.classList.toggle('active',(a==='move'&&gizmoMode==='translate')||(a==='rotate'&&gizmoMode==='rotate')||(a==='hole'&&draftMode==='hole')||(a==='sketch'&&draftMode==='rect')||(a==='circle'&&draftMode==='circle'));
+ });
+}
+function dockAction(a){
+ if(a==='more'){cadMore.classList.toggle('open');return}
+ cadMore.classList.remove('open');
+ if(a==='sketch')beginDraft('rect');
+ else if(a==='circle')beginDraft('circle');
+ else if(a==='hole')beginDraft('hole');
+ else if(a==='move')setGizmo('translate');
+ else if(a==='rotate')setGizmo('rotate');
+ else if(toolMap[a])document.getElementById(toolMap[a]).click();
+ refreshCadDock();
+}
+cadDock.addEventListener('click',e=>{const b=e.target.closest('[data-tool]');if(b&&!b.disabled)dockAction(b.dataset.tool)});
+cadMore.addEventListener('click',e=>{const b=e.target.closest('[data-tool]');if(b)dockAction(b.dataset.tool)});
+const originalSelectForDock=select;
+select=function(obj){originalSelectForDock(obj);refreshCadDock()};
+refreshCadDock();
 </script>
 </body>
 </html>
