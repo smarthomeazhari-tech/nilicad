@@ -574,23 +574,36 @@ document.getElementById('cadTestServer').onclick=async()=>{
  }catch(e){status.textContent='اتصال برقرار نشد: '+e.message+' (آدرس، HTTPS، CORS و فایروال را بررسی کنید)'}
 };
 async function exportExactSTEP(){
+ let stage='آماده‌سازی';
  try{
   if(!items.length){toast('ابتدا یک قطعه بسازید');return}
   const url=cadSelectedUrl();
   if(!url){cadServerPanel(true);toast('ابتدا آدرس موتور را تنظیم کنید');return}
-  if(location.protocol==='https:'&&url.startsWith('http:')){
-   cadServerPanel(true);
-   throw new Error('صفحه HTTPS به موتور HTTP متصل نمی‌شود؛ موتور را با HTTPS منتشر کنید');
-  }
+  if(location.protocol==='https:'&&url.startsWith('http:'))throw new Error('آدرس موتور باید HTTPS باشد');
+  stage='ساخت مدل';
   const payload={objects:items.map(makeExactNode)};
-  toast('در حال ساخت STEP دقیق در موتور انتخاب‌شده…');
-  const response=await fetch(url+'/export-step',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
-  if(!response.ok)throw new Error((await response.text()).slice(0,300));
+  const json=JSON.stringify(payload);
+  console.info('[STEP diagnostic] request bytes',new Blob([json]).size,'objects',payload.objects.length);
+  stage='ارسال درخواست';toast('STEP: در حال ارسال درخواست...');
+  const response=await fetch(url+'/export-step',{method:'POST',headers:{'Content-Type':'application/json'},body:json});
+  console.info('[STEP diagnostic] HTTP',response.status,'content-type',response.headers.get('content-type'),'content-length',response.headers.get('content-length'));
+  stage='بررسی پاسخ';
+  if(!response.ok){const err=await response.text();throw new Error('HTTP '+response.status+': '+err.slice(0,180))}
+  stage='خواندن فایل';toast('STEP: پاسخ سرور دریافت شد؛ در حال خواندن فایل...');
   const blob=await response.blob();
+  console.info('[STEP diagnostic] blob bytes',blob.size);
   if(!blob.size)throw new Error('پاسخ سرور خالی است');
+  const head=await blob.slice(0,160).text();
+  if(!head.includes('ISO-10303-21'))throw new Error('پاسخ STEP معتبر نیست: '+head.slice(0,90));
+  stage='ذخیره در آیپد';toast('STEP: فایل '+blob.size+' بایت دریافت شد؛ در حال ذخیره...');
   await saveExactStepOnIOS(blob,'NiliCAD-precise.step');
-  toast('فایل STEP آماده ذخیره است');
- }catch(e){toast('STEP دقیق: '+e.message);console.error(e)}
+  toast('STEP: دریافت موفق ('+blob.size+' بایت)');
+ }catch(e){
+  const message='STEP ['+stage+']: '+(e&&e.message?e.message:String(e));
+  console.error('[STEP diagnostic]',message,e);
+  toast(message);
+  alert(message+'\nلطفاً از این پیام عکس بگیرید.');
+ }
 }
 document.querySelector('#exactStepBtn').onclick=exportExactSTEP;
 
