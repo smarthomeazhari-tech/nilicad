@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>NiliCAD Web Preview v1.8.0</title>
+<title>NiliCAD Web Preview v2.1.0</title>
 <style>
 :root{color-scheme:dark;--bg:#111820;--panel:#1a2530;--panel2:#202e3b;--line:#344554;--text:#e8eef4;--muted:#9aabba;--accent:#55b7a7;--accent2:#397eae}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font-family:Tahoma,Arial,sans-serif;overflow:hidden}
@@ -114,7 +114,7 @@ window.addEventListener('unhandledrejection', function(e) {
 <body>
 <div id="startupError" hidden style="position:fixed;top:55px;left:10px;right:10px;z-index:99999;background:#8a2931;color:white;padding:12px;border-radius:10px;direction:rtl"></div><div class="app">
 <header>
-  <strong>NiliCAD</strong><span class="tag">WEB PREVIEW · v1.8.0 · Context Tools</span>
+  <strong>NiliCAD</strong><span class="tag">WEB PREVIEW · v2.1.0 · Context Tools</span>
   <div class="actions">
     <button id="panelsBtn">قطعات / ابعاد</button><button id="openBtn">بازکردن</button><input type="file" id="fileInput" accept=".json,application/json" hidden><button id="newBtn">پروژه جدید</button><button id="saveBtn">ذخیره</button>
   </div>
@@ -126,7 +126,7 @@ window.addEventListener('unhandledrejection', function(e) {
   <button class="primary" id="sketchBtn">✎ Sketch / Extrude</button><button id="touchSketchBtn" class="primary">✍ ترسیم لمسی</button><button id="holeBtn">◉ سوراخ ۶ جهت</button><button id="filletBtn">◠ Fillet</button><button id="chamferBtn">◇ Chamfer</button><button id="copyBtn">⧉ کپی</button><button id="moveBtn">↔ جابه‌جایی</button><button id="deleteBtn">حذف انتخاب</button>
   <button id="gMove">⇄ Move 3D</button><button id="gRotate">⟳ Rotate 3D</button><button id="gScale">⤢ Scale 3D</button><button id="gOff">اتمام ابزار</button><button id="gridBtn" class="active">شبکه</button>
   <button id="fitBtn">نمایش همه</button>
-  <button id="stlBtn">خروجی STL</button>
+  <button id="stlBtn">خروجی STL</button><button id="stepBtn">خروجی STEP مثلثی</button><button id="exactStepBtn">STEP دقیق (OCCT)</button><button id="serverSettingsBtn">انتخاب موتور CAD</button>
   <button id="undoBtn">Undo</button><button id="redoBtn">Redo</button>
 </nav>
 <main class="workspace">
@@ -160,7 +160,7 @@ window.addEventListener('unhandledrejection', function(e) {
 <button data-tool="redo"><span class="ico">↷</span><span class="toolLabel">تکرار</span></button>
 </aside>
 <canvas id="view"></canvas><div id="booleanBanner"><div id="booleanText">حجم دوم را انتخاب کنید</div><button id="booleanCancel">لغو</button></div>
-<div id="cadMore" aria-label="ابزارهای بیشتر"><button data-tool="box">مکعب</button><button data-tool="cyl">استوانه</button><button data-tool="sphere">کره</button><button data-tool="cone">مخروط</button><button data-tool="hex">شش‌ضلعی</button><button data-tool="union">اتصال Union</button><button data-tool="subtract">تفریق Subtract</button><button data-tool="intersect">اشتراک Intersect</button><button data-tool="fillet">Fillet</button><button data-tool="chamfer">Chamfer</button><button data-tool="stl">STL</button><button data-tool="undo">Undo</button><button data-tool="redo">Redo</button></div>
+<div id="cadMore" aria-label="ابزارهای بیشتر"><button data-tool="box">مکعب</button><button data-tool="cyl">استوانه</button><button data-tool="sphere">کره</button><button data-tool="cone">مخروط</button><button data-tool="hex">شش‌ضلعی</button><button data-tool="union">اتصال Union</button><button data-tool="subtract">تفریق Subtract</button><button data-tool="intersect">اشتراک Intersect</button><button data-tool="fillet">Fillet</button><button data-tool="chamfer">Chamfer</button><button data-tool="stl">STL</button><button data-tool="step">STEP</button><button data-tool="undo">Undo</button><button data-tool="redo">Redo</button></div>
 <div id="cadDock" aria-label="ابزارهای انتخابی طراحی"><button data-tool="sketch"><span class="sym">✎</span>ترسیم</button><button data-tool="circle"><span class="sym">◯</span>دایره</button><button data-tool="hole"><span class="sym">◎</span>سوراخ</button><button data-tool="face"><span class="sym">▱</span>روی وجه</button><span class="dockDivider"></span><button data-tool="move"><span class="sym">✥</span>حرکت</button><button data-tool="rotate"><span class="sym">⟳</span>چرخش</button><button data-tool="copy"><span class="sym">▣</span>کپی</button><button data-tool="delete"><span class="sym">⌫</span>حذف</button><button data-tool="more"><span class="sym">⋯</span>بیشتر</button></div>
 
     <canvas id="sketchOverlay" aria-label="ترسیم مستقیم روی مدل"></canvas>
@@ -254,7 +254,7 @@ function toast(msg){const t=document.querySelector('#toast');t.textContent=msg;t
 let redoStack=[];
 function state(){return items.map(o=>({id:o.id,name:o.name,type:o.type,dims:{...o.dims},pos:o.mesh.position.toArray(),rot:o.mesh.rotation.toArray().slice(0,3),scale:o.mesh.scale.toArray(),plane:o.plane||'XY',operations:o.operations||[]}))}
 function snapshot(){history.push(state());redoStack=[];if(history.length>30)history.shift()}
-function restore(s){gizmo.detach();items.forEach(o=>{world.remove(o.mesh);o.mesh.geometry.dispose()});items=s.map(d=>{const mesh=new THREE.Mesh(geometry(d.type,d.dims),mat.clone());mesh.position.fromArray(d.pos);if(d.rot)mesh.rotation.set(...d.rot);if(d.scale)mesh.scale.fromArray(d.scale);mesh.userData.objectId=d.id;if(!d.rot){if(d.plane==='XZ')mesh.rotation.x=Math.PI/2;if(d.plane==='YZ')mesh.rotation.z=-Math.PI/2;}world.add(mesh);return {...d,mesh}});nextId=Math.max(1,...items.map(o=>o.id+1));select(null);refreshList()}
+function restore(s){gizmo.detach();items.forEach(o=>{world.remove(o.mesh);o.mesh.geometry.dispose()});items=s.map(d=>{const mesh=new THREE.Mesh(geometry(d.type,d.dims),mat.clone());mesh.position.fromArray(d.pos);if(d.rot)mesh.rotation.set(...d.rot);if(d.scale)mesh.scale.fromArray(d.scale);mesh.userData.objectId=d.id;if(!d.rot){if(d.plane==='XZ')mesh.rotation.x=Math.PI/2;if(d.plane==='YZ')mesh.rotation.z=-Math.PI/2;}world.add(mesh);return {...d,mesh,exactRecipe:d.exactRecipe||null}});nextId=Math.max(1,...items.map(o=>o.id+1));select(null);refreshList()}
 
 function profileGeometry(type,d){
  const w=d.x,h=d.y,depth=d.z,r=Math.min(d.r||Math.min(w,h)*.12,w*.45,h*.45);
@@ -318,7 +318,7 @@ document.querySelector('#topBtn').onclick=()=>setView('top');document.querySelec
 document.querySelector('#newBtn').onclick=()=>{if(!confirm('پروژه فعلی پاک شود؟'))return;gizmo.detach();items.forEach(o=>{world.remove(o.mesh);o.mesh.geometry.dispose()});items=[];select(null);refreshList();nextId=1;history=[];redoStack=[];toast('پروژه جدید آماده است')};
 document.querySelector('#undoBtn').onclick=()=>{if(!history.length){toast('عملیاتی برای بازگشت نیست');return}redoStack.push(state());restore(history.pop());toast('Undo انجام شد')};
 document.querySelector('#redoBtn').onclick=()=>{if(!redoStack.length){toast('عملیاتی برای تکرار نیست');return}history.push(state());restore(redoStack.pop());toast('Redo انجام شد')};
-document.querySelector('#saveBtn').onclick=()=>{const data={format:'NiliCAD-Web',version:'1.8',units:'mm',objects:items.map(o=>({id:o.id,name:o.name,type:o.type,dimensions:o.dims,plane:o.plane||'XY',operations:o.operations||[],position:o.mesh.position.toArray(),rotation:o.mesh.rotation.toArray().slice(0,3),scale:o.mesh.scale.toArray()}))};download(new Blob([JSON.stringify(data,null,2)],{type:'application/json'}),'project.nilicad.json');toast('فایل پروژه ذخیره شد')};
+document.querySelector('#saveBtn').onclick=()=>{const data={format:'NiliCAD-Web',version:'2.1',units:'mm',objects:items.map(o=>({id:o.id,name:o.name,type:o.type,dimensions:o.dims,plane:o.plane||'XY',operations:o.operations||[],exactRecipe:o.exactRecipe||null,position:o.mesh.position.toArray(),rotation:o.mesh.rotation.toArray().slice(0,3),scale:o.mesh.scale.toArray()}))};download(new Blob([JSON.stringify(data,null,2)],{type:'application/json'}),'project.nilicad.json');toast('فایل پروژه ذخیره شد')};
 const skDlg=document.querySelector('#sketchDialog');
 document.querySelector('#sketchBtn').onclick=()=>skDlg.showModal();
 document.querySelector('#skCancel').onclick=()=>skDlg.close();
@@ -466,12 +466,13 @@ function commitDraft(){const d=draftDims();if(!d){toast('ابتدا با انگ�
   const width=circle?d.x:Math.abs(du),height=circle?d.x:Math.abs(dv);
   const geo=circle?new THREE.CylinderGeometry(d.radius,d.radius,depth,64):new THREE.BoxGeometry(width,depth,height);
   const cutter=new THREE.Mesh(geo);
+  const cutterData={type:circle?'cylinder':'box',dims:circle?{x:d.radius*2,y:d.radius*2,z:depth}:{x:width,y:height,z:depth}};
   const center=circle?draftA.clone():draftA.clone().addScaledVector(faceU,du/2).addScaledVector(faceV,dv/2);
   const outward=document.querySelector('#faceOperation').value==='add';
   cutter.position.copy(center).addScaledVector(faceNormal,(outward?1:-1)*depth/2);
   const basis=new THREE.Matrix4().makeBasis(faceU,faceNormal,faceV);
   cutter.quaternion.setFromRotationMatrix(basis);cutter.updateMatrixWorld(true);
-  const target=faceTarget;endDraft();performBoolean(target,{mesh:cutter,name:outward?'Face Extrude':'Face Cut'},outward?'union':'subtract',{temporaryCutter:true});return;
+  const target=faceTarget;endDraft();performBoolean(target,{mesh:cutter,name:outward?'Face Extrude':'Face Cut',...cutterData},outward?'union':'subtract',{temporaryCutter:true});return;
  }
  if(draftMode==='hole'){
   const target=draftTarget,rad=d.radius;
@@ -484,7 +485,7 @@ function commitDraft(){const d=draftDims();if(!d){toast('ابتدا با انگ�
   cutterMesh.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),normal);
   cutterMesh.position.copy(draftA).addScaledVector(normal,-depth*.12);
   cutterMesh.updateMatrixWorld(true);
-  const cutter={mesh:cutterMesh};
+  const cutter={mesh:cutterMesh,type:'cylinder',dims:{x:rad*2,y:rad*2,z:depth}};
   if(!booleanModule){
    toast('موتور تفریق در حال بارگذاری است؛ پس از بارگذاری دوباره تأیید کنید');
    import('https://esm.sh/three-bvh-csg@0.0.17?bundle').then(m=>{booleanModule=m;toast('موتور آماده شد؛ دوباره فضای خالی را لمس کنید')}).catch(e=>toast('بارگذاری موتور ناموفق بود: '+e.message));
@@ -502,6 +503,144 @@ function commitDraft(){const d=draftDims();if(!d){toast('ابتدا با انگ�
 document.querySelector('#draftConfirm').onclick=commitDraft;
 
 document.querySelector('#stlBtn').onclick=()=>{if(!items.length){toast('ابتدا یک قطعه بسازید');return}const exporter=new STLExporter();const result=exporter.parse(world,{binary:true});download(new Blob([result],{type:'application/octet-stream'}),'NiliCAD-model.stl');toast('خروجی STL آماده شد')};
+
+
+function makeExactNode(o){
+ if(!o||!o.mesh)throw new Error('قطعه هندسه ندارد');
+ o.mesh.updateMatrixWorld(true);
+ if(o.exactRecipe)return o.exactRecipe;
+ const t=o.type;
+ if(!['box','cylinder','sphere','cone','hexPrism','extrudeRect','extrudeCircle'].includes(t)){
+   throw new Error('این قطعه هنوز تاریخچه B-Rep قابل بازسازی ندارد');
+ }
+ return {type:t,dims:o.dims,transform:o.mesh.matrixWorld.toArray()};
+}
+
+const cadServerStorageKey='nilicad_occt_profiles_v1';
+function cadServerProfiles(){
+ try{return Object.assign({mode:'local',local:'http://127.0.0.1:8765',cloud:''},JSON.parse(localStorage.getItem(cadServerStorageKey)||'{}'))}
+ catch{return {mode:'local',local:'http://127.0.0.1:8765',cloud:''}}
+}
+function cadSelectedUrl(){
+ const p=cadServerProfiles();
+ return (p.mode==='cloud'?p.cloud:p.local).trim().replace(/\/+$/,'');
+}
+function cadServerPanel(show){
+ const panel=document.getElementById('cadServerPanel');
+ if(show){
+  const p=cadServerProfiles();
+  document.getElementById('cadLocalUrl').value=p.local;
+  document.getElementById('cadCloudUrl').value=p.cloud;
+  const radio=panel.querySelector('input[name="cadServerMode"][value="'+p.mode+'"]');
+  if(radio)radio.checked=true;
+ }
+ panel.style.display=show?'flex':'none';
+}
+function cadSaveProfiles(){
+ const mode=document.querySelector('input[name="cadServerMode"]:checked')?.value||'local';
+ const local=document.getElementById('cadLocalUrl').value.trim();
+ const cloud=document.getElementById('cadCloudUrl').value.trim();
+ if(mode==='cloud'&&!/^https:\/\//i.test(cloud))throw new Error('آدرس سرور اینترنتی باید با https:// شروع شود');
+ if(mode==='local'&&!/^https?:\/\//i.test(local))throw new Error('آدرس سرور ویندوز معتبر نیست');
+ const p={mode,local,cloud};
+ localStorage.setItem(cadServerStorageKey,JSON.stringify(p));
+ return p;
+}
+document.getElementById('serverSettingsBtn').onclick=()=>cadServerPanel(true);
+document.getElementById('cadCloseServer').onclick=()=>cadServerPanel(false);
+document.getElementById('cadSaveServer').onclick=()=>{
+ try{const p=cadSaveProfiles();cadServerPanel(false);toast('موتور '+(p.mode==='local'?'ویندوز':'اینترنتی')+' انتخاب شد')}
+ catch(e){document.getElementById('cadServerStatus').textContent=e.message}
+};
+document.getElementById('cadTestServer').onclick=async()=>{
+ const status=document.getElementById('cadServerStatus');
+ try{
+  const p=cadSaveProfiles(),url=(p.mode==='local'?p.local:p.cloud).replace(/\/+$/,'');
+  status.textContent='در حال بررسی اتصال...';
+  const controller=new AbortController();
+  const timeout=setTimeout(()=>controller.abort(),8000);
+  try{
+   const r=await fetch(url+'/health',{signal:controller.signal});
+   if(!r.ok)throw new Error('HTTP '+r.status);
+   const data=await r.json();
+   status.textContent=data.ok?'اتصال برقرار است؛ موتور '+(data.kernel||'CAD')+' پاسخ داد':'پاسخ موتور معتبر نیست';
+  }finally{clearTimeout(timeout)}
+ }catch(e){status.textContent='اتصال برقرار نشد: '+e.message+' (آدرس، HTTPS، CORS و فایروال را بررسی کنید)'}
+};
+async function exportExactSTEP(){
+ try{
+  if(!items.length){toast('ابتدا یک قطعه بسازید');return}
+  const url=cadSelectedUrl();
+  if(!url){cadServerPanel(true);toast('ابتدا آدرس موتور را تنظیم کنید');return}
+  if(location.protocol==='https:'&&url.startsWith('http:')){
+   cadServerPanel(true);
+   throw new Error('صفحه HTTPS به موتور HTTP متصل نمی‌شود؛ موتور را با HTTPS منتشر کنید');
+  }
+  const payload={objects:items.map(makeExactNode)};
+  toast('در حال ساخت STEP دقیق در موتور انتخاب‌شده…');
+  const response=await fetch(url+'/export-step',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+  if(!response.ok)throw new Error((await response.text()).slice(0,300));
+  download(await response.blob(),'NiliCAD-precise.step');
+  toast('فایل STEP دقیق ساخته شد');
+ }catch(e){toast('STEP دقیق: '+e.message);console.error(e)}
+}
+document.querySelector('#exactStepBtn').onclick=exportExactSTEP;
+
+// Experimental faceted STEP export. Each mesh triangle is an individual planar face;
+// this is not a parametric CAD B-Rep or a replacement for OCCT.
+function exportFacetedSTEP(){
+ if(!items.length){toast('ابتدا یک قطعه بسازید');return}
+ let entities=[], n=0;
+ const ent=(v)=>{entities.push('#'+(++n)+'='+v+';');return '#'+n};
+ const str=(x)=>"'"+String(x).replace(/'/g,"''")+"'";
+ const pt=(v)=>ent("CARTESIAN_POINT('',("+v.map(x=>Number(x.toFixed(6))).join(',')+"))");
+ const direction=(v)=>ent("DIRECTION('',("+v.map(x=>Number(x.toFixed(9))).join(',')+"))");
+ const origin=pt([0,0,0]),axis=direction([0,0,1]),refdir=direction([1,0,0]);
+ const placement=ent("AXIS2_PLACEMENT_3D('',"+origin+","+axis+","+refdir+")");
+ const context=ent("GEOMETRIC_REPRESENTATION_CONTEXT(3)");
+ const length=ent("(LENGTH_UNIT() NAMED_UNIT(*) SI_UNIT(.MILLI.,.METRE.))");
+ const angle=ent("(NAMED_UNIT(*) PLANE_ANGLE_UNIT() SI_UNIT($,.RADIAN.))");
+ const solidAngle=ent("(NAMED_UNIT(*) SOLID_ANGLE_UNIT() SI_UNIT($,.STERADIAN.))");
+ const units=ent("GLOBAL_UNIT_ASSIGNED_CONTEXT(("+length+","+angle+","+solidAngle+"))");
+ const uncertainty=ent("UNCERTAINTY_MEASURE_WITH_UNIT(LENGTH_MEASURE(0.001),"+length+",'distance_accuracy_value','')");
+ const breps=[];
+ let triangles=0;
+ world.updateMatrixWorld(true);
+ for(const o of items){
+  const mesh=o.mesh;
+  if(!mesh?.geometry)continue;
+  const geom=mesh.geometry,position=geom.getAttribute('position'),index=geom.index;
+  if(!position)continue;
+  const faces=[],v=(i)=>new THREE.Vector3().fromBufferAttribute(position,i).applyMatrix4(mesh.matrixWorld);
+  const count=index?index.count:position.count;
+  for(let k=0;k+2<count;k+=3){
+   const a=v(index?index.getX(k):k),b=v(index?index.getX(k+1):k+1),c=v(index?index.getX(k+2):k+2);
+   const normal=new THREE.Vector3().subVectors(b,a).cross(new THREE.Vector3().subVectors(c,a));
+   if(normal.lengthSq()<1e-14)continue;
+   normal.normalize();
+   const x=new THREE.Vector3().subVectors(b,a).normalize();
+   const planePlace=ent("AXIS2_PLACEMENT_3D('',"+pt(a.toArray())+","+direction(normal.toArray())+","+direction(x.toArray())+")");
+   const plane=ent("PLANE('',"+planePlace+")");
+   const poly=ent("POLY_LOOP('',("+[a,b,c].map(q=>pt(q.toArray())).join(',')+"))");
+   const bound=ent("FACE_OUTER_BOUND('',"+poly+",.T.)");
+   faces.push(ent("FACE_SURFACE('',("+bound+"),"+plane+",.T.)"));
+   triangles++;
+   if(triangles>18000){toast('مدل برای خروجی STEP مثلثی بسیار بزرگ است');return}
+  }
+  if(faces.length){
+   const shell=ent("CLOSED_SHELL('',("+faces.join(',')+"))");
+   breps.push(ent("FACETED_BREP("+str(o.name||'Solid')+","+shell+")"));
+  }
+ }
+ if(!breps.length){toast('سطح قابل خروجی یافت نشد');return}
+ const shape=ent("SHAPE_REPRESENTATION('NiliCAD faceted model',("+[placement,...breps].join(',')+"),"+context+")");
+ const header="ISO-10303-21;\nHEADER;\nFILE_DESCRIPTION(('NiliCAD faceted triangular STEP export; not analytic CAD'),'2;1');\nFILE_NAME('NiliCAD-faceted.step','"+new Date().toISOString()+"',('NiliCAD'),('NiliCAD'),'NiliCAD Web','NiliCAD','');\nFILE_SCHEMA(('CONFIG_CONTROL_DESIGN'));\nENDSEC;\nDATA;\n";
+ const result=header+entities.join('\n')+"\nENDSEC;\nEND-ISO-10303-21;\n";
+ download(new Blob([result],{type:'application/step'}),'NiliCAD-faceted.step');
+ toast('خروجی STEP مثلثی ایجاد شد؛ سازگاری با نرم‌افزار مقصد باید بررسی شود');
+}
+document.querySelector('#stepBtn').onclick=exportFacetedSTEP;
+
 function download(blob,name){const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),30000)}
 let directPaletteReady=false;
 // Initial object is created only after all interface handlers are ready.
@@ -590,6 +729,7 @@ function performBoolean(a,b,op,opts={}){
   const center=g.boundingBox.getCenter(new THREE.Vector3());
   const size=g.boundingBox.getSize(new THREE.Vector3());
   g.translate(-center.x,-center.y,-center.z);if(!g.attributes.normal)g.computeVertexNormals();g.computeBoundingSphere();
+  const exactRecipe={op,left:makeExactNode(a),right:makeExactNode(b)};
   snapshot();
   gizmo.detach();gizmoMode=null;
   for(const o of [a,b]){if(o===b&&opts.temporaryCutter)continue;world.remove(o.mesh);o.mesh.geometry.dispose()}
@@ -599,7 +739,7 @@ function performBoolean(a,b,op,opts={}){
   const mesh=new THREE.Mesh(g,mat.clone());mesh.position.copy(center);mesh.userData.objectId=id;
   mesh.castShadow=true;mesh.receiveShadow=true;world.add(mesh);
   if(opts.temporaryCutter)b.mesh.geometry.dispose();
-  const obj={id,name:a.name,type:'booleanMesh',dims,mesh,operations:[...(a.operations||[]),{kind:op,tool:b.name||'سوراخ',at:new Date().toISOString()}]};
+  const obj={id,name:a.name,type:'booleanMesh',dims,mesh,exactRecipe,operations:[...(a.operations||[]),{kind:op,tool:b.name||'سوراخ',at:new Date().toISOString()}]};
   items.push(obj);
   operationLog.push({objectId:id,kind:op,tool:b.name||"سوراخ"});
   booleanPending=null;booleanBanner.classList.remove('active');
@@ -610,7 +750,7 @@ function performBoolean(a,b,op,opts={}){
 // Context-sensitive dock: all actions dispatch to existing, tested command handlers.
 const cadDock=document.getElementById('cadDock');
 const cadMore=document.getElementById('cadMore');
-const toolMap={box:'boxBtn',cyl:'cylBtn',sphere:'sphereBtn',cone:'coneBtn',hex:'hexBtn',fillet:'filletBtn',chamfer:'chamferBtn',stl:'stlBtn',undo:'undoBtn',redo:'redoBtn',copy:'copyBtn',delete:'deleteBtn'};
+const toolMap={box:'boxBtn',cyl:'cylBtn',sphere:'sphereBtn',cone:'coneBtn',hex:'hexBtn',fillet:'filletBtn',chamfer:'chamferBtn',stl:'stlBtn',step:'stepBtn',undo:'undoBtn',redo:'redoBtn',copy:'copyBtn',delete:'deleteBtn'};
 function refreshCadDock(){
  const has=!!selected;
  cadDock.querySelectorAll('[data-tool]').forEach(b=>{
@@ -644,5 +784,23 @@ refreshCadDock();
 addObject('box',{x:60,y:40,z:20},'Base Plate');
 resize();
 </script>
-<div id="cadBuild" style="position:fixed;bottom:3px;right:7px;z-index:1;font:10px sans-serif;color:#81919e;pointer-events:none">NiliCAD v1.8 · آزمایشی</div></body>
+<div id="cadBuild" style="position:fixed;bottom:3px;right:7px;z-index:1;font:10px sans-serif;color:#81919e;pointer-events:none">NiliCAD v2.1 · آزمایشی</div>
+<div id="cadServerPanel" style="display:none;position:fixed;inset:0;z-index:99990;background:#0009;align-items:center;justify-content:center;direction:rtl">
+ <div style="background:#1e293b;color:white;border:1px solid #64748b;border-radius:16px;padding:20px;width:min(440px,92vw);box-shadow:0 12px 45px #0009">
+  <h3 style="margin:0 0 12px">انتخاب محل موتور Open CASCADE</h3>
+  <label style="display:block;margin:8px 0"><input type="radio" name="cadServerMode" value="local"> کامپیوتر ویندوز / شبکه داخلی</label>
+  <label style="display:block;margin:8px 0"><input type="radio" name="cadServerMode" value="cloud"> سرور اینترنتی</label>
+  <label style="display:block;margin-top:12px">آدرس موتور ویندوز</label>
+  <input id="cadLocalUrl" placeholder="http://192.168.1.10:8765" style="width:100%;padding:9px;box-sizing:border-box">
+  <label style="display:block;margin-top:12px">آدرس موتور اینترنتی (HTTPS)</label>
+  <input id="cadCloudUrl" placeholder="https://cad.example.com" style="width:100%;padding:9px;box-sizing:border-box">
+  <div style="display:flex;gap:8px;margin-top:16px;flex-wrap:wrap">
+   <button id="cadSaveServer" type="button">ذخیره و انتخاب</button>
+   <button id="cadTestServer" type="button">آزمایش اتصال</button>
+   <button id="cadCloseServer" type="button">بستن</button>
+  </div>
+  <p id="cadServerStatus" style="font-size:12px;line-height:1.7;margin-bottom:0">برای GitHub Pages، سرور اینترنتی باید HTTPS داشته باشد. اتصال HTTP از صفحه HTTPS معمولاً مسدود می‌شود.</p>
+ </div>
+</div>
+</body>
 </html>
