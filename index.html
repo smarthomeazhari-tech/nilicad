@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>NiliCAD Web Preview v2.1.0</title>
+<title>NiliCAD Web Preview v2.2.0</title>
 <style>
 :root{color-scheme:dark;--bg:#111820;--panel:#1a2530;--panel2:#202e3b;--line:#344554;--text:#e8eef4;--muted:#9aabba;--accent:#55b7a7;--accent2:#397eae}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font-family:Tahoma,Arial,sans-serif;overflow:hidden}
@@ -114,7 +114,7 @@ window.addEventListener('unhandledrejection', function(e) {
 <body>
 <div id="startupError" hidden style="position:fixed;top:55px;left:10px;right:10px;z-index:99999;background:#8a2931;color:white;padding:12px;border-radius:10px;direction:rtl"></div><div class="app">
 <header>
-  <strong>NiliCAD</strong><span class="tag">WEB PREVIEW · v2.1.0 · Context Tools</span>
+  <strong>NiliCAD</strong><span class="tag">WEB PREVIEW · v2.2.0 · Context Tools</span>
   <div class="actions">
     <button id="panelsBtn">قطعات / ابعاد</button><button id="openBtn">بازکردن</button><input type="file" id="fileInput" accept=".json,application/json" hidden><button id="newBtn">پروژه جدید</button><button id="saveBtn">ذخیره</button>
   </div>
@@ -126,7 +126,7 @@ window.addEventListener('unhandledrejection', function(e) {
   <button class="primary" id="sketchBtn">✎ Sketch / Extrude</button><button id="touchSketchBtn" class="primary">✍ ترسیم لمسی</button><button id="holeBtn">◉ سوراخ ۶ جهت</button><button id="filletBtn">◠ Fillet</button><button id="chamferBtn">◇ Chamfer</button><button id="copyBtn">⧉ کپی</button><button id="moveBtn">↔ جابه‌جایی</button><button id="deleteBtn">حذف انتخاب</button>
   <button id="gMove">⇄ Move 3D</button><button id="gRotate">⟳ Rotate 3D</button><button id="gScale">⤢ Scale 3D</button><button id="gOff">اتمام ابزار</button><button id="gridBtn" class="active">شبکه</button>
   <button id="fitBtn">نمایش همه</button>
-  <button id="stlBtn">خروجی STL</button><button id="stepBtn">خروجی STEP مثلثی</button><button id="exactStepBtn">STEP دقیق (OCCT)</button><button id="serverSettingsBtn">انتخاب موتور CAD</button>
+  <button id="stlBtn">خروجی STL</button><button id="stepBtn">خروجی STEP دقیق (OCCT)</button><button id="exactStepBtn" style="display:none">STEP دقیق (OCCT)</button><button id="serverSettingsBtn">انتخاب موتور CAD</button>
   <button id="undoBtn">Undo</button><button id="redoBtn">Redo</button>
 </nav>
 <main class="workspace">
@@ -252,9 +252,9 @@ const selectedMat=new THREE.MeshStandardMaterial({color:0xf2b45d,metalness:.2,ro
 const raycaster=new THREE.Raycaster(),pointer=new THREE.Vector2();
 function toast(msg){const t=document.querySelector('#toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),1800)}
 let redoStack=[];
-function state(){return items.map(o=>({id:o.id,name:o.name,type:o.type,dims:{...o.dims},pos:o.mesh.position.toArray(),rot:o.mesh.rotation.toArray().slice(0,3),scale:o.mesh.scale.toArray(),plane:o.plane||'XY',operations:o.operations||[]}))}
+function state(){return items.map(o=>({id:o.id,name:o.name,type:o.type,dims:{...o.dims},pos:o.mesh.position.toArray(),rot:o.mesh.rotation.toArray().slice(0,3),scale:o.mesh.scale.toArray(),plane:o.plane||'XY',operations:o.operations||[],exactRecipe:o.exactRecipe||null,geometryJSON:o.type==='booleanMesh'?o.mesh.geometry.toJSON():null}))}
 function snapshot(){history.push(state());redoStack=[];if(history.length>30)history.shift()}
-function restore(s){gizmo.detach();items.forEach(o=>{world.remove(o.mesh);o.mesh.geometry.dispose()});items=s.map(d=>{const mesh=new THREE.Mesh(geometry(d.type,d.dims),mat.clone());mesh.position.fromArray(d.pos);if(d.rot)mesh.rotation.set(...d.rot);if(d.scale)mesh.scale.fromArray(d.scale);mesh.userData.objectId=d.id;if(!d.rot){if(d.plane==='XZ')mesh.rotation.x=Math.PI/2;if(d.plane==='YZ')mesh.rotation.z=-Math.PI/2;}world.add(mesh);return {...d,mesh,exactRecipe:d.exactRecipe||null}});nextId=Math.max(1,...items.map(o=>o.id+1));select(null);refreshList()}
+function restore(s){gizmo.detach();items.forEach(o=>{world.remove(o.mesh);o.mesh.geometry.dispose()});items=s.map(d=>{const mesh=new THREE.Mesh(d.type==='booleanMesh'&&d.geometryJSON?new THREE.BufferGeometryLoader().parse(d.geometryJSON):geometry(d.type,d.dims),mat.clone());mesh.position.fromArray(d.pos);if(d.rot)mesh.rotation.set(...d.rot);if(d.scale)mesh.scale.fromArray(d.scale);mesh.userData.objectId=d.id;if(!d.rot){if(d.plane==='XZ')mesh.rotation.x=Math.PI/2;if(d.plane==='YZ')mesh.rotation.z=-Math.PI/2;}world.add(mesh);return {...d,mesh,exactRecipe:d.exactRecipe||null}});nextId=Math.max(1,...items.map(o=>o.id+1));select(null);refreshList()}
 
 function profileGeometry(type,d){
  const w=d.x,h=d.y,depth=d.z,r=Math.min(d.r||Math.min(w,h)*.12,w*.45,h*.45);
@@ -318,7 +318,7 @@ document.querySelector('#topBtn').onclick=()=>setView('top');document.querySelec
 document.querySelector('#newBtn').onclick=()=>{if(!confirm('پروژه فعلی پاک شود؟'))return;gizmo.detach();items.forEach(o=>{world.remove(o.mesh);o.mesh.geometry.dispose()});items=[];select(null);refreshList();nextId=1;history=[];redoStack=[];toast('پروژه جدید آماده است')};
 document.querySelector('#undoBtn').onclick=()=>{if(!history.length){toast('عملیاتی برای بازگشت نیست');return}redoStack.push(state());restore(history.pop());toast('Undo انجام شد')};
 document.querySelector('#redoBtn').onclick=()=>{if(!redoStack.length){toast('عملیاتی برای تکرار نیست');return}history.push(state());restore(redoStack.pop());toast('Redo انجام شد')};
-document.querySelector('#saveBtn').onclick=()=>{const data={format:'NiliCAD-Web',version:'2.1',units:'mm',objects:items.map(o=>({id:o.id,name:o.name,type:o.type,dimensions:o.dims,plane:o.plane||'XY',operations:o.operations||[],exactRecipe:o.exactRecipe||null,position:o.mesh.position.toArray(),rotation:o.mesh.rotation.toArray().slice(0,3),scale:o.mesh.scale.toArray()}))};download(new Blob([JSON.stringify(data,null,2)],{type:'application/json'}),'project.nilicad.json');toast('فایل پروژه ذخیره شد')};
+document.querySelector('#saveBtn').onclick=()=>{const data={format:'NiliCAD-Web',version:'2.2',units:'mm',objects:items.map(o=>({id:o.id,name:o.name,type:o.type,dimensions:o.dims,plane:o.plane||'XY',operations:o.operations||[],exactRecipe:o.exactRecipe||null,position:o.mesh.position.toArray(),rotation:o.mesh.rotation.toArray().slice(0,3),scale:o.mesh.scale.toArray()}))};download(new Blob([JSON.stringify(data,null,2)],{type:'application/json'}),'project.nilicad.json');toast('فایل پروژه ذخیره شد')};
 const skDlg=document.querySelector('#sketchDialog');
 document.querySelector('#sketchBtn').onclick=()=>skDlg.showModal();
 document.querySelector('#skCancel').onclick=()=>skDlg.close();
@@ -508,7 +508,10 @@ document.querySelector('#stlBtn').onclick=()=>{if(!items.length){toast('ابتد
 function makeExactNode(o){
  if(!o||!o.mesh)throw new Error('قطعه هندسه ندارد');
  o.mesh.updateMatrixWorld(true);
- if(o.exactRecipe)return o.exactRecipe;
+ if(o.exactRecipe){
+  const t=o.mesh.matrixWorld.toArray();
+  return {op:'transform',shape:o.exactRecipe,transform:t};
+ }
  const t=o.type;
  if(!['box','cylinder','sphere','cone','hexPrism','extrudeRect','extrudeCircle'].includes(t)){
    throw new Error('این قطعه هنوز تاریخچه B-Rep قابل بازسازی ندارد');
@@ -639,7 +642,7 @@ function exportFacetedSTEP(){
  download(new Blob([result],{type:'application/step'}),'NiliCAD-faceted.step');
  toast('خروجی STEP مثلثی ایجاد شد؛ سازگاری با نرم‌افزار مقصد باید بررسی شود');
 }
-document.querySelector('#stepBtn').onclick=exportFacetedSTEP;
+document.querySelector('#stepBtn').onclick=exportExactSTEP;
 
 function download(blob,name){const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),30000)}
 let directPaletteReady=false;
@@ -784,7 +787,7 @@ refreshCadDock();
 addObject('box',{x:60,y:40,z:20},'Base Plate');
 resize();
 </script>
-<div id="cadBuild" style="position:fixed;bottom:3px;right:7px;z-index:1;font:10px sans-serif;color:#81919e;pointer-events:none">NiliCAD v2.1 · آزمایشی</div>
+<div id="cadBuild" style="position:fixed;bottom:3px;right:7px;z-index:1;font:10px sans-serif;color:#81919e;pointer-events:none">NiliCAD v2.2 · آزمایشی</div>
 <div id="cadServerPanel" style="display:none;position:fixed;inset:0;z-index:99990;background:#0009;align-items:center;justify-content:center;direction:rtl">
  <div style="background:#1e293b;color:white;border:1px solid #64748b;border-radius:16px;padding:20px;width:min(440px,92vw);box-shadow:0 12px 45px #0009">
   <h3 style="margin:0 0 12px">انتخاب محل موتور Open CASCADE</h3>
