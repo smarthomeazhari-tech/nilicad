@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>NiliCAD Web Preview v1.3</title>
+<title>NiliCAD Web Preview v1.3.1</title>
 <style>
 :root{color-scheme:dark;--bg:#111820;--panel:#1a2530;--panel2:#202e3b;--line:#344554;--text:#e8eef4;--muted:#9aabba;--accent:#55b7a7;--accent2:#397eae}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font-family:Tahoma,Arial,sans-serif;overflow:hidden}
@@ -79,7 +79,7 @@ html,body{overscroll-behavior:none}#view{touch-action:none}.toolbar{scrollbar-wi
 <body>
 <div class="app">
 <header>
-  <strong>NiliCAD</strong><span class="tag">WEB PREVIEW · v1.3 · Context Tools</span>
+  <strong>NiliCAD</strong><span class="tag">WEB PREVIEW · v1.3.1 · Context Tools</span>
   <div class="actions">
     <button id="panelsBtn">قطعات / ابعاد</button><button id="openBtn">بازکردن</button><input type="file" id="fileInput" accept=".json,application/json" hidden><button id="newBtn">پروژه جدید</button><button id="saveBtn">ذخیره</button>
   </div>
@@ -263,7 +263,7 @@ document.querySelector('#topBtn').onclick=()=>setView('top');document.querySelec
 document.querySelector('#newBtn').onclick=()=>{if(!confirm('پروژه فعلی پاک شود؟'))return;gizmo.detach();items.forEach(o=>{world.remove(o.mesh);o.mesh.geometry.dispose()});items=[];select(null);refreshList();nextId=1;history=[];redoStack=[];toast('پروژه جدید آماده است')};
 document.querySelector('#undoBtn').onclick=()=>{if(!history.length){toast('عملیاتی برای بازگشت نیست');return}redoStack.push(state());restore(history.pop());toast('Undo انجام شد')};
 document.querySelector('#redoBtn').onclick=()=>{if(!redoStack.length){toast('عملیاتی برای تکرار نیست');return}history.push(state());restore(redoStack.pop());toast('Redo انجام شد')};
-document.querySelector('#saveBtn').onclick=()=>{const data={format:'NiliCAD-Web',version:'1.2',units:'mm',objects:items.map(o=>({id:o.id,name:o.name,type:o.type,dimensions:o.dims,plane:o.plane||'XY',position:o.mesh.position.toArray(),rotation:o.mesh.rotation.toArray().slice(0,3),scale:o.mesh.scale.toArray()}))};download(new Blob([JSON.stringify(data,null,2)],{type:'application/json'}),'project.nilicad.json');toast('فایل پروژه ذخیره شد')};
+document.querySelector('#saveBtn').onclick=()=>{const data={format:'NiliCAD-Web',version:'1.3.1',units:'mm',objects:items.map(o=>({id:o.id,name:o.name,type:o.type,dimensions:o.dims,plane:o.plane||'XY',position:o.mesh.position.toArray(),rotation:o.mesh.rotation.toArray().slice(0,3),scale:o.mesh.scale.toArray()}))};download(new Blob([JSON.stringify(data,null,2)],{type:'application/json'}),'project.nilicad.json');toast('فایل پروژه ذخیره شد')};
 const skDlg=document.querySelector('#sketchDialog');
 document.querySelector('#sketchBtn').onclick=()=>skDlg.showModal();
 document.querySelector('#skCancel').onclick=()=>skDlg.close();
@@ -409,10 +409,10 @@ document.querySelector('#draftConfirm').onclick=commitDraft;
 
 document.querySelector('#stlBtn').onclick=()=>{if(!items.length){toast('ابتدا یک قطعه بسازید');return}const exporter=new STLExporter();const result=exporter.parse(world,{binary:true});download(new Blob([result],{type:'application/octet-stream'}),'NiliCAD-model.stl');toast('خروجی STL آماده شد')};
 function download(blob,name){const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),30000)}
+let directPaletteReady=false;
 addObject('box',{x:60,y:40,z:20},'Base Plate');
 
 // Direct in-scene interaction: selection exposes contextual actions near the solid.
-let directPaletteReady=false;
 const directPalette=document.getElementById('directPalette');
 const directHint=document.getElementById('directHint');
 let directHidden=false;
