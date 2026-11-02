@@ -586,8 +586,10 @@ async function exportExactSTEP(){
   toast('در حال ساخت STEP دقیق در موتور انتخاب‌شده…');
   const response=await fetch(url+'/export-step',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
   if(!response.ok)throw new Error((await response.text()).slice(0,300));
-  download(await response.blob(),'NiliCAD-precise.step');
-  toast('فایل STEP دقیق ساخته شد');
+  const blob=await response.blob();
+  if(!blob.size)throw new Error('پاسخ سرور خالی است');
+  await saveExactStepOnIOS(blob,'NiliCAD-precise.step');
+  toast('فایل STEP آماده ذخیره است');
  }catch(e){toast('STEP دقیق: '+e.message);console.error(e)}
 }
 document.querySelector('#exactStepBtn').onclick=exportExactSTEP;
@@ -647,6 +649,24 @@ function exportFacetedSTEP(){
 }
 document.querySelector('#stepBtn').onclick=exportExactSTEP;
 
+async function saveExactStepOnIOS(blob,name){
+ const file=new File([blob],name,{type:'application/octet-stream'});
+ // On iPad, the native share sheet can save directly to Files.
+ if(navigator.share && navigator.canShare && navigator.canShare({files:[file]})){
+  try { await navigator.share({files:[file],title:name}); return; }
+  catch(err){
+   if(err && err.name==='AbortError')throw new Error('ذخیره فایل لغو شد');
+   console.warn('Native STEP share failed; trying browser download',err);
+  }
+ }
+ const url=URL.createObjectURL(blob);
+ const a=document.createElement('a');
+ a.href=url;a.download=name;a.style.display='none';
+ document.body.appendChild(a);
+ a.click();
+ a.remove();
+ setTimeout(()=>URL.revokeObjectURL(url),120000);
+}
 function download(blob,name){const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),30000)}
 let directPaletteReady=false;
 // Initial object is created only after all interface handlers are ready.
