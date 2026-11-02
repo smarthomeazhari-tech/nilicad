@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>NiliCAD Web Preview v1.3.3</title>
+<title>NiliCAD Web Preview v1.4.0</title>
 <style>
 :root{color-scheme:dark;--bg:#111820;--panel:#1a2530;--panel2:#202e3b;--line:#344554;--text:#e8eef4;--muted:#9aabba;--accent:#55b7a7;--accent2:#397eae}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font-family:Tahoma,Arial,sans-serif;overflow:hidden}
@@ -71,6 +71,18 @@ html,body{overscroll-behavior:none}#view{touch-action:none}.toolbar{scrollbar-wi
 #directHint{bottom:118px;max-width:90%;white-space:normal;text-align:center}
 #draftHud{top:8px}
 @media(max-width:600px){#cadDock{bottom:35px}#cadDock button{min-width:52px;padding:6px}#cadMore{bottom:98px}#directHint{bottom:100px;font-size:10px}}
+
+/* NiliCAD original CAD-style icon toolbar; no third-party icon artwork */
+:root{--accent:#2e8cff;--accent2:#1b65c6;--panel:#111d2c;--panel2:#1a2a3d}
+header{background:#0d1928;border-bottom-color:#26384c}header strong{font-size:21px;color:#eaf4ff}
+#cadDock{background:#0d1b2cef;border-color:#3a526c}#cadDock button.active{background:#164f9b;border-color:#50a2ff}
+#cadSide{position:absolute;z-index:7;top:15px;left:12px;bottom:148px;width:155px;display:flex;flex-direction:column;gap:4px;overflow:auto;padding:9px;background:#0d1929ef;border:1px solid #31455d;border-radius:15px;direction:rtl;scrollbar-width:thin}
+#cadSide button{display:flex;align-items:center;gap:9px;flex:none;width:100%;padding:9px 10px;border:0;background:transparent;text-align:right;font-size:12px;border-radius:9px;min-height:40px}
+#cadSide button:hover,#cadSide button.active{background:#1768c7}#cadSide button:disabled{opacity:.4}
+#cadSide .ico{display:inline-flex;align-items:center;justify-content:center;font-size:21px;min-width:25px;color:#d6eaff}
+#cadSide .sideTitle{font-size:10px;color:#91b3d1;padding:6px 10px}
+#cadSide .sideDivider{height:1px;background:#34475c;margin:3px 0}
+@media(max-width:700px){#cadSide{width:54px;left:6px;top:8px;bottom:125px;padding:5px}#cadSide button{padding:8px;justify-content:center}#cadSide button .toolLabel,#cadSide .sideTitle{display:none}#cadSide .ico{font-size:22px}#cadDock{max-width:calc(100% - 64px);left:calc(50% + 24px)}}
 </style>
 <script type="importmap">
 {"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.164.1/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.164.1/examples/jsm/"}}
@@ -89,7 +101,7 @@ window.addEventListener('unhandledrejection', function(e) {
 <body>
 <div id="startupError" hidden style="position:fixed;top:55px;left:10px;right:10px;z-index:99999;background:#8a2931;color:white;padding:12px;border-radius:10px;direction:rtl"></div><div class="app">
 <header>
-  <strong>NiliCAD</strong><span class="tag">WEB PREVIEW · v1.3.3 · Context Tools</span>
+  <strong>NiliCAD</strong><span class="tag">WEB PREVIEW · v1.4.0 · Context Tools</span>
   <div class="actions">
     <button id="panelsBtn">قطعات / ابعاد</button><button id="openBtn">بازکردن</button><input type="file" id="fileInput" accept=".json,application/json" hidden><button id="newBtn">پروژه جدید</button><button id="saveBtn">ذخیره</button>
   </div>
@@ -115,7 +127,26 @@ window.addEventListener('unhandledrejection', function(e) {
   </aside>
   <section class="viewport">
 <div id="directPalette"><button data-act="translate">↔ حرکت</button><button data-act="rotate">⟳ چرخش</button><button data-act="scale">⤢ اندازه</button><button data-act="hole">◉ سوراخ</button><button data-act="copy">⧉ کپی</button><button data-act="delete">⌫ حذف</button><button data-act="close">×</button></div><div id="directHint">روی یک حجم لمس کنید؛ ابزارها کنار همان حجم ظاهر می‌شوند</div>
-    <canvas id="view"></canvas>
+    <aside id="cadSide" aria-label="ابزارهای مدل‌سازی">
+<div class="sideTitle">ابزارهای طراحی</div>
+<button data-tool="select"><span class="ico">↖</span><span class="toolLabel">انتخاب</span></button>
+<button data-tool="sketch"><span class="ico">✎</span><span class="toolLabel">مستطیل</span></button>
+<button data-tool="circle"><span class="ico">◯</span><span class="toolLabel">دایره</span></button>
+<button data-tool="box"><span class="ico">⬡</span><span class="toolLabel">افزودن حجم</span></button>
+<div class="sideDivider"></div>
+<button data-tool="hole"><span class="ico">◎</span><span class="toolLabel">سوراخ‌کاری</span></button>
+<button data-tool="move"><span class="ico">✥</span><span class="toolLabel">جابه‌جایی</span></button>
+<button data-tool="rotate"><span class="ico">↻</span><span class="toolLabel">چرخش</span></button>
+<button data-tool="scale"><span class="ico">⤢</span><span class="toolLabel">تغییر مقیاس</span></button>
+<button data-tool="fillet"><span class="ico">◠</span><span class="toolLabel">گردکردن گوشه</span></button>
+<button data-tool="chamfer"><span class="ico">◢</span><span class="toolLabel">پخ‌زدن گوشه</span></button>
+<div class="sideDivider"></div>
+<button data-tool="copy"><span class="ico">▣</span><span class="toolLabel">کپی</span></button>
+<button data-tool="delete"><span class="ico">⌫</span><span class="toolLabel">حذف</span></button>
+<button data-tool="undo"><span class="ico">↶</span><span class="toolLabel">بازگشت</span></button>
+<button data-tool="redo"><span class="ico">↷</span><span class="toolLabel">تکرار</span></button>
+</aside>
+<canvas id="view"></canvas>
 <div id="cadMore" aria-label="ابزارهای بیشتر"><button data-tool="box">مکعب</button><button data-tool="cyl">استوانه</button><button data-tool="sphere">کره</button><button data-tool="cone">مخروط</button><button data-tool="hex">شش‌ضلعی</button><button data-tool="fillet">Fillet</button><button data-tool="chamfer">Chamfer</button><button data-tool="stl">STL</button><button data-tool="undo">Undo</button><button data-tool="redo">Redo</button></div>
 <div id="cadDock" aria-label="ابزارهای انتخابی طراحی"><button data-tool="sketch"><span class="sym">✎</span>ترسیم</button><button data-tool="circle"><span class="sym">◯</span>دایره</button><button data-tool="hole"><span class="sym">◎</span>سوراخ</button><span class="dockDivider"></span><button data-tool="move"><span class="sym">✥</span>حرکت</button><button data-tool="rotate"><span class="sym">⟳</span>چرخش</button><button data-tool="copy"><span class="sym">▣</span>کپی</button><button data-tool="delete"><span class="sym">⌫</span>حذف</button><button data-tool="more"><span class="sym">⋯</span>بیشتر</button></div>
 
@@ -427,6 +458,7 @@ const directPalette=document.getElementById('directPalette');
 const directHint=document.getElementById('directHint');
 let directHidden=false;
 function updateDirectPalette(){
+ return;
  if(!selected||directHidden||draftMode){directPalette.style.display='none';return}
  const rect=canvas.getBoundingClientRect();
  const p=selected.mesh.getWorldPosition(new THREE.Vector3()).project(camera);
@@ -477,12 +509,14 @@ function refreshCadDock(){
  const has=!!selected;
  cadDock.querySelectorAll('[data-tool]').forEach(b=>{
   const a=b.dataset.tool;
-  b.disabled=['move','rotate','copy','delete','hole'].includes(a)&&!has;
+  b.disabled=['move','rotate','copy','delete','hole','scale'].includes(a)&&!has;
   b.classList.toggle('active',(a==='move'&&gizmoMode==='translate')||(a==='rotate'&&gizmoMode==='rotate')||(a==='hole'&&draftMode==='hole')||(a==='sketch'&&draftMode==='rect')||(a==='circle'&&draftMode==='circle'));
  });
 }
 function dockAction(a){
  if(a==='more'){cadMore.classList.toggle('open');return}
+ if(a==='select'){endDraft();gizmo.detach();gizmoMode=null;controls.enabled=true;refreshCadDock();return}
+ if(a==='scale'){setGizmo('scale');refreshCadDock();return}
  cadMore.classList.remove('open');
  if(a==='sketch')beginDraft('rect');
  else if(a==='circle')beginDraft('circle');
@@ -496,6 +530,7 @@ cadDock.addEventListener('click',e=>{const b=e.target.closest('[data-tool]');if(
 cadMore.addEventListener('click',e=>{const b=e.target.closest('[data-tool]');if(b)dockAction(b.dataset.tool)});
 const originalSelectForDock=select;
 select=function(obj){originalSelectForDock(obj);refreshCadDock()};
+document.getElementById('cadSide').addEventListener('click',e=>{const b=e.target.closest('[data-tool]');if(b)dockAction(b.dataset.tool)});
 refreshCadDock();
 // Initialize scene last, after the contextual palette and dock are ready.
 addObject('box',{x:60,y:40,z:20},'Base Plate');
