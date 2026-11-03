@@ -151,7 +151,7 @@ header,.toolbar,.panel.left,.panel.right,#cadSide,#cadDock,#cadMore,#directHint,
 #ncTop{top:16px;left:50%;transform:translateX(-50%);display:flex;align-items:center;gap:7px;padding:7px 10px;border-radius:14px;background:#ffffffed;box-shadow:0 2px 12px #1224381e}
 #ncLeft{left:12px;top:105px;bottom:65px;display:flex;flex-direction:column;gap:5px;align-items:flex-start;overflow:auto;max-width:min(310px,65vw);scrollbar-width:none}
 #ncRight{right:12px;top:100px;display:flex;flex-direction:column;gap:5px;align-items:flex-end;max-height:75%;overflow:auto}
-#ncBottom{display:none!important;bottom:15px;left:50%;transform:translateX(-50%);display:flex;gap:7px;align-items:center;padding:7px 10px;background:#fffed;border:1px solid #e0e6ec;border-radius:14px;box-shadow:0 3px 14px #162d4022;max-width:90%;overflow:auto}
+#ncBottom{display:flex!important;bottom:15px;left:50%;transform:translateX(-50%);display:flex;gap:7px;align-items:center;padding:7px 10px;background:#fffed;border:1px solid #e0e6ec;border-radius:14px;box-shadow:0 3px 14px #162d4022;max-width:90%;overflow:auto}
 .ncBtn{display:flex;align-items:center;gap:10px;min-height:43px;padding:6px 12px;background:#fff!important;border:1px solid #e2e7ec!important;border-radius:10px!important;color:#253547!important;font-size:13px!important;box-shadow:0 1px 5px #15283b18;cursor:pointer}
 .ncBtn .ncIcon{font-size:20px;min-width:24px;text-align:center}.ncBtn.active{background:#d9ebff!important;border-color:#338fe7!important;color:#125da4!important}.ncBtn:disabled{opacity:.4;cursor:not-allowed}.ncSmall{font-size:11px;color:#697989}.ncGroup{display:none;flex-direction:column;gap:4px;padding:5px 0 8px 17px}.ncGroup.open{display:flex}.ncTitle{font-weight:bold;font-size:15px;padding:0 8px}.ncSeparator{height:1px;background:#dbe3eb;width:95%;margin:7px 0}
 #ncRight .ncBtn{min-height:38px}#ncToast{bottom:85px;left:50%;transform:translateX(-50%);background:#fff;border-radius:9px;padding:9px 14px;display:none;box-shadow:0 2px 12px #0002;max-width:75%;text-align:center}
@@ -1415,6 +1415,7 @@ function ncSelectRegion(region){
  else ncSelectedRegions.add(region);
  ncActiveRegion=[...ncSelectedRegions].at(-1)||null;
  ncUpdateRegionColors();
+ document.getElementById('ncExtrude').disabled=!ncSelectedRegions.size&&!(skClosed||skCircle);
  ncMessage(ncSelectedRegions.size+' سطح انتخاب شده؛ با کشیدن فلش حجم بدهید');
 }
 function ncUpdateRegionColors(){
@@ -1489,7 +1490,7 @@ function ncStroke(pts,color=0x1577cf){
 }
 function ncCirclePoints(c,r){return Array.from({length:97},(_,i)=>({x:c.x+Math.cos(i*Math.PI*2/96)*r,y:c.y+Math.sin(i*Math.PI*2/96)*r}))}
 function ncDraw(){ncClearVisual();for(const seg of skSegments){if(seg.kind==='line')ncStroke([seg.a,seg.b]);else{const ar=skArcShape(seg.a,seg.m,seg.b);if(ar)ncStroke(Array.from({length:49},(_,i)=>({x:ar.cx+ar.r*Math.cos(ar.t0+ar.span*i/48),y:ar.cy+ar.r*Math.sin(ar.t0+ar.span*i/48)})))}}if(skCircle)ncStroke(ncCirclePoints(skCircle.center,skCircle.r));for(const p of skPoints){const dot=new THREE.Mesh(new THREE.SphereGeometry(1.05,14,10),new THREE.MeshBasicMaterial({color:0xf0a326}));dot.position.copy(nc3(p,.2));nc.group.add(dot)}if(skClosed||skCircle){try{const sh=skShape();if(sh){const geo=new THREE.ShapeGeometry(sh,32);geo.scale(1,-1,1);geo.rotateX(-Math.PI/2);const surf=new THREE.Mesh(geo,new THREE.MeshBasicMaterial({color:0x5bc7ec,transparent:true,opacity:.28,side:THREE.DoubleSide,depthWrite:false}));surf.position.y=.025;nc.group.add(surf);nc.surface=surf}}catch(err){ncMessage('خطای تشکیل سطح: '+err.message)}}document.getElementById('ncExtrude').disabled=!(skClosed||skCircle)&&!ncSelectedRegions.size;ncPositionPull()}
-function ncPositionPull(){if(nc.mode!=='pull'||(!nc.surface&&!ncSelectedRegions.size)){ncPull.style.display='none';return}const target=ncSelectedRegions.size?[...ncSelectedRegions][0].mesh:nc.surface;const box=new THREE.Box3().setFromObject(target),center=box.getCenter(new THREE.Vector3());center.y=Number(ncDepth.value)||0;center.project(camera);const r=canvas.getBoundingClientRect();const x=(center.x+1)*r.width/2,y=(1-center.y)*r.height/2;ncPull.style.left=Math.max(75,Math.min(r.width-65,x))+'px';ncPull.style.top=Math.max(120,Math.min(r.height-65,y))+'px';ncPull.style.display='flex'}
+function ncPositionPull(){if(nc.mode!=='pull'||(!nc.surface&&!ncSelectedRegions.size)){ncPull.style.display='none';return}const target=ncSelectedRegions.size?[...ncSelectedRegions][0].mesh:nc.surface;const box=new THREE.Box3().setFromObject(target),center=box.getCenter(new THREE.Vector3());center.y=Number(ncDepth.value)||0;center.project(camera);const r=canvas.getBoundingClientRect();const pr=ncPull.offsetParent?.getBoundingClientRect()||{left:0,top:0};const x=r.left-pr.left+(center.x+1)*r.width/2,y=r.top-pr.top+(1-center.y)*r.height/2;ncPull.style.left=Math.max(75,Math.min(r.width-65,x))+'px';ncPull.style.top=Math.max(120,Math.min(r.height-65,y))+'px';ncPull.style.display='flex'}
 function ncSetTool(t){nc.tool=t;skTool=t==='rectangle'?'line':t;document.querySelectorAll('[data-nctool]').forEach(b=>b.classList.toggle('active',b.dataset.nctool===t));nc.rectStart=null;ncMessage('ابزار '+t+' فعال شد؛ روی شبکه سه‌بعدی لمس کنید')}
 function ncSketchReset(){if((skClosed||skCircle)&&nc.surface&&!ncActiveRegion)ncSaveRegion();ncActiveRegion=null;skSegments=[];skPoints=[];skArcPoints=[];skCircle=null;skClosed=false;nc.rectStart=null;nc.mode='sketch';ncClearVisual();ncPull.style.display='none';document.getElementById('ncExtrude').disabled=true;document.getElementById('ncConfirm').style.display='none';controls.enabled=true;ncMessage('Sketch آماده است · صفحه XZ · واحد mm')}
 function ncTap(p){if(nc.mode!=='sketch')return;if(nc.tool==='rectangle'){if(!nc.rectStart){ncSketchReset();nc.rectStart=p;ncMessage('گوشه مقابل مستطیل را انتخاب کنید')}else{const a=nc.rectStart,b=p;skPoints=[a,{x:b.x,y:a.y},b,{x:a.x,y:b.y}];skSegments=skPoints.map((q,i)=>({kind:'line',a:q,b:skPoints[(i+1)%4]}));skClosed=true;nc.rectStart=null}}else{skTool=nc.tool;skAdd(p)}ncDraw()}
@@ -1516,11 +1517,11 @@ function ncPullPreview(){
   for(const r of regions){const sh=ncShapeForRegion(r);if(!sh)continue;
    const g=ncSolidGeometry(sh,depth);
    const mesh=new THREE.Mesh(g,new THREE.MeshStandardMaterial({color:0x4ba9dc,transparent:true,opacity:.75,side:THREE.DoubleSide,depthWrite:true}));
-   nc.group.add(mesh);nc.preview=mesh;
+   mesh.userData.ncPreview=true;nc.group.add(mesh);nc.preview=mesh;
   }
  }else{
   const sh=skShape();if(!sh)return;
-  const mesh=new THREE.Mesh(ncSolidGeometry(sh,depth),new THREE.MeshStandardMaterial({color:0x4ba9dc,transparent:true,opacity:.75,side:THREE.DoubleSide,depthWrite:true}));nc.group.add(mesh);nc.preview=mesh;
+  const mesh=new THREE.Mesh(ncSolidGeometry(sh,depth),new THREE.MeshStandardMaterial({color:0x4ba9dc,transparent:true,opacity:.75,side:THREE.DoubleSide,depthWrite:true}));mesh.userData.ncPreview=true;nc.group.add(mesh);nc.preview=mesh;
  }
  ncPositionPull();
 }
@@ -1530,7 +1531,7 @@ function ncStartPull(){
  ncDepth.value='0';nc.mode='pull';document.getElementById('ncConfirm').style.display='flex';
  ncPullPreview();ncMessage(ncSelectedRegions.size+' سطح انتخاب شده؛ فلش را بکشید و در فضای خالی ضربه بزنید');
 }
-const ncHandle=ncPull.querySelector('.handle');ncHandle.addEventListener('pointerdown',e=>{nc.drag={id:e.pointerId,y:e.clientY,depth:Number(ncDepth.value)||0};ncHandle.setPointerCapture(e.pointerId);e.preventDefault()});ncHandle.addEventListener('pointermove',e=>{if(!nc.drag||e.pointerId!==nc.drag.id)return;ncDepth.value=(nc.drag.depth+(nc.drag.y-e.clientY)*.4).toFixed(1);ncPullPreview()});ncHandle.addEventListener('pointerup',()=>nc.drag=null);ncDepth.addEventListener('change',ncPullPreview);
+const ncHandle=ncPull.querySelector('.handle');ncHandle.addEventListener('pointerdown',e=>{nc.drag={id:e.pointerId,y:e.clientY,depth:Number(ncDepth.value)||0};ncHandle.setPointerCapture(e.pointerId);e.preventDefault()});ncHandle.addEventListener('pointermove',e=>{if(!nc.drag||e.pointerId!==nc.drag.id)return;ncDepth.value=(nc.drag.depth+(nc.drag.y-e.clientY)*.4).toFixed(1);ncPullPreview()});ncHandle.addEventListener('pointerup',()=>nc.drag=null);ncHandle.addEventListener('pointercancel',()=>nc.drag=null);ncHandle.addEventListener('lostpointercapture',()=>nc.drag=null);ncDepth.addEventListener('change',ncPullPreview);
 function ncFinish(){
  if(nc.mode!=='pull')return;
  const depth=Number(ncDepth.value);if(!Number.isFinite(depth)||Math.abs(depth)<.01){ncMessage('عمق حجم باید غیرصفر باشد');return}
@@ -1598,7 +1599,7 @@ function ncPenDown(e){
   if(e.button!==0)return;
   const rect=canvas.getBoundingClientRect();pointer.set((e.clientX-rect.left)/rect.width*2-1,-(e.clientY-rect.top)/rect.height*2+1);
   raycaster.setFromCamera(pointer,camera);
-  const hit=nc.preview?raycaster.intersectObject(nc.preview,false).length:0;
+  const hit=raycaster.intersectObjects(nc.group.children.filter(o=>o.userData.ncPreview),false).length;
   if(!hit){if(Math.abs(Number(ncDepth.value))>=.01)ncFinish();else ncMessage('ابتدا فلش را بکشید تا عمق غیرصفر شود');e.preventDefault();e.stopImmediatePropagation();}
   return;
  }
@@ -1687,6 +1688,12 @@ canvas.addEventListener('pointerdown',ncPenDown,true);
 canvas.addEventListener('pointermove',ncPenMove,true);
 canvas.addEventListener('pointerup',ncPenUp,true);
 canvas.addEventListener('pointercancel',e=>{if(ncPen.active?.id===e.pointerId)ncPen.active=null},true);
+// Touch taps select; moved or multiple touches remain camera gestures.
+const ncTouches=new Map();let ncMultiTouch=false;
+canvas.addEventListener('pointerdown',e=>{if(e.pointerType!=='touch')return;if(!ncTouches.size)ncMultiTouch=false;ncTouches.set(e.pointerId,{x:e.clientX,y:e.clientY});if(ncTouches.size>1)ncMultiTouch=true},true);
+canvas.addEventListener('pointermove',e=>{const t=ncTouches.get(e.pointerId);if(t&&Math.hypot(e.clientX-t.x,e.clientY-t.y)>10)t.moved=true},true);
+canvas.addEventListener('pointerup',e=>{const t=ncTouches.get(e.pointerId);ncTouches.delete(e.pointerId);if(!t||t.moved||ncMultiTouch||booleanPending||!['select','sketch'].includes(nc.mode))return;ncPenDown({pointerType:'mouse',button:0,clientX:e.clientX,clientY:e.clientY,preventDefault:()=>e.preventDefault(),stopImmediatePropagation:()=>e.stopImmediatePropagation()});if(ncPen.active)ncPen.active=null},true);
+canvas.addEventListener('pointercancel',e=>ncTouches.delete(e.pointerId),true);
 // Ignore finger taps in sketch mode; fingers are reserved for camera navigation.
 canvas.addEventListener('pointerup',e=>{if((nc.mode==='sketch'||nc.mode==='select')&&e.pointerType==='touch'){ncTapDown=null}},true);
 // Prevent OrbitControls from receiving pencil events, including pointer capture from earlier handlers.
