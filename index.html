@@ -96,6 +96,11 @@ header{background:#0d1928;border-bottom-color:#26384c}header strong{font-size:21
 @media(max-width:600px){#cadDock{bottom:6px}#cadMore{bottom:67px}#directHint{bottom:71px}}
 #booleanBanner{display:none;position:absolute;top:64px;right:12px;z-index:15;background:#12304a;border:1px solid #4d9fff;color:white;border-radius:12px;padding:12px;direction:rtl;max-width:280px;box-shadow:0 8px 24px #0009}
 #booleanBanner.active{display:block}#booleanBanner button{margin:8px 5px 0 0}
+/* STEP transfer / explicit iPad save panel */
+#stepSavePanel{position:fixed;inset:0;z-index:99990;background:#0009;display:none;align-items:center;justify-content:center;padding:20px;direction:rtl}
+#stepSaveCard{background:#172638;border:1px solid #63849c;border-radius:16px;padding:20px;width:min(92vw,450px);box-shadow:0 15px 55px #000a}
+#stepSaveCard p{line-height:1.9;overflow-wrap:anywhere}
+#stepSaveCard button{margin:5px;min-height:44px}
 </style>
 <script type="importmap">
 {"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.164.1/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.164.1/examples/jsm/"}}
@@ -112,6 +117,7 @@ window.addEventListener('unhandledrejection', function(e) {
 </script>
 </head>
 <body>
+<div id="stepSavePanel" role="dialog" aria-modal="true" aria-label="ذخیره فایل STEP"><div id="stepSaveCard"><h3>فایل STEP آماده است</h3><p id="stepSaveDetails"></p><button class="primary" id="stepSaveNow">ذخیره فایل STEP</button><button id="stepSaveClose">بستن</button><p class="note">در Safari، پس از لمس ذخیره، پوشه Downloads یا فهرست دانلودهای مرورگر را بررسی کنید.</p></div></div>
 <div id="startupError" hidden style="position:fixed;top:55px;left:10px;right:10px;z-index:99999;background:#8a2931;color:white;padding:12px;border-radius:10px;direction:rtl"></div><div class="app">
 <header>
   <strong>NiliCAD</strong><span class="tag">WEB PREVIEW · v2.2.0 · Context Tools</span>
@@ -573,16 +579,17 @@ document.getElementById('cadTestServer').onclick=async()=>{
   }finally{clearTimeout(timeout)}
  }catch(e){status.textContent='اتصال برقرار نشد: '+e.message+' (آدرس، HTTPS، CORS و فایروال را بررسی کنید)'}
 };
-// Read STEP incrementally, with a per-chunk inactivity timeout and useful diagnostics.
-async function readStepResponse(response, onProgress, inactivityMs=45000){
- const expected=Number(response.headers.get('content-length'))||0;
+// Transfer STEP with an inactivity deadline; abort the fetch on stalled streams.
+async function readStepResponse(response, onProgress, inactivityMs=45000, controller=null){
+ const lengthHeader=response.headers.get('content-length');
+ const expected=lengthHeader!==null?Number(lengthHeader):0;
  const maxBytes=200*1024*1024;
  if(expected>maxBytes)throw new Error('حجم فایل STEP بیش از حد مجاز است');
  if(!response.body || !response.body.getReader){
   const blob=await response.blob();
   if(blob.size>maxBytes)throw new Error('حجم فایل STEP بیش از حد مجاز است');
-  onProgress(blob.size,expected);
-  return blob;
+  if(expected && blob.size!==expected)throw new Error('انتقال ناقص STEP');
+  onProgress(blob.size,expected);return blob;
  }
  const reader=response.body.getReader();
  const chunks=[];let total=0;
@@ -590,27 +597,46 @@ async function readStepResponse(response, onProgress, inactivityMs=45000){
   while(true){
    let timer;
    const timeout=new Promise((_,reject)=>{
-    timer=setTimeout(()=>reject(new Error('تا '+Math.round(inactivityMs/1000)+' ثانیه داده جدیدی از سرور دریافت نشد')),inactivityMs);
+    timer=setTimeout(()=>{controller?.abort();reject(new Error('تا '+Math.round(inactivityMs/1000)+' ثانیه داده جدیدی از سرور دریافت نشد'))},inactivityMs);
    });
    let result;
-   try{result=await Promise.race([reader.read(),timeout]);}
+   try{result=await Promise.race([reader.read(),timeout])}
    finally{clearTimeout(timer)}
    if(result.done)break;
-   if(result.value && result.value.byteLength){
-    chunks.push(result.value);
-    total+=result.value.byteLength;
+   if(result.value?.byteLength){
+    chunks.push(result.value);total+=result.value.byteLength;
     if(total>maxBytes)throw new Error('حجم فایل STEP بیش از حد مجاز است');
     onProgress(total,expected);
    }
   }
- }catch(err){try{await reader.cancel()}catch(_){}throw err}
+ }catch(err){try{controller?.abort()}catch(_){}throw err}
  if(expected && total!==expected)throw new Error('انتقال ناقص STEP: '+total+' از '+expected+' بایت');
  return new Blob(chunks,{type:'application/step'});
+}
+let pendingStepBlob=null;
+const stepPanel=document.getElementById('stepSavePanel');
+const stepDetails=document.getElementById('stepSaveDetails');
+document.getElementById('stepSaveClose').onclick=()=>{stepPanel.style.display='none'};
+document.getElementById('stepSaveNow').onclick=()=>{
+ if(!pendingStepBlob){alert('فایل STEP آماده نیست');return}
+ // The download click occurs synchronously inside a real user gesture.
+ const url=URL.createObjectURL(pendingStepBlob);
+ const a=document.createElement('a');
+ a.href=url;a.download='NiliCAD-precise.step';a.style.display='none';
+ document.body.appendChild(a);a.click();a.remove();
+ stepDetails.textContent='درخواست ذخیره ارسال شد. لطفاً Downloads مرورگر را بررسی کنید. اندازه فایل: '+pendingStepBlob.size+' بایت.';
+ setTimeout(()=>URL.revokeObjectURL(url),300000);
+};
+function showStepSave(blob){
+ pendingStepBlob=blob;
+ stepDetails.textContent='دریافت کامل و بررسی اولیه موفق بود. حجم فایل: '+blob.size+' بایت. برای ذخیره، دکمه زیر را لمس کنید.';
+ stepPanel.style.display='flex';
 }
 async function exportExactSTEP(){
  let stage='آماده‌سازی';
  const button=document.querySelector('#stepBtn');
  if(button.disabled)return;
+ pendingStepBlob=null;stepPanel.style.display='none';
  button.disabled=true;
  const started=performance.now();
  try{
@@ -641,14 +667,14 @@ async function exportExactSTEP(){
     const progress=expected?' / '+expected+' بایت ('+Math.floor(received/expected*100)+'٪)':' بایت';
     toast('STEP: دریافت '+received+progress);
    }
-  });
+  },45000,controller);
   console.info('[STEP diagnostic] blob bytes',blob.size,'elapsed ms',Math.round(performance.now()-started));
   if(!blob.size)throw new Error('پاسخ سرور خالی است');
   const head=await blob.slice(0,512).text();
   if(!head.includes('ISO-10303-21'))throw new Error('پاسخ STEP معتبر نیست: '+head.slice(0,90));
-  stage='ذخیره در آیپد';toast('STEP: فایل '+blob.size+' بایت دریافت شد؛ در حال ذخیره...');
-  await saveExactStepOnIOS(blob,'NiliCAD-precise.step');
-  toast('STEP: دریافت موفق ('+blob.size+' بایت)');
+  stage='آماده برای ذخیره';
+  showStepSave(blob);
+  toast('STEP: دریافت کامل ('+blob.size+' بایت)؛ دکمه ذخیره را لمس کنید');
  }catch(e){
   const message='STEP ['+stage+']: '+(e?.name==='AbortError'?'مهلت دریافت پاسخ سرور پایان یافت':(e&&e.message?e.message:String(e)));
   console.error('[STEP diagnostic]',message,e);
@@ -713,14 +739,6 @@ function exportFacetedSTEP(){
 }
 document.querySelector('#stepBtn').onclick=exportExactSTEP;
 
-async function saveExactStepOnIOS(blob,name){
- // Browser download is more reliable than navigator.share() after a long async request on iPadOS.
- const url=URL.createObjectURL(blob);
- const a=document.createElement('a');
- a.href=url;a.download=name;a.style.display='none';
- document.body.appendChild(a);
- try{a.click()}finally{a.remove();setTimeout(()=>URL.revokeObjectURL(url),120000)}
-}
 function download(blob,name){const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),30000)}
 let directPaletteReady=false;
 // Initial object is created only after all interface handlers are ready.
