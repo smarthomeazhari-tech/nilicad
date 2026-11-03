@@ -174,12 +174,19 @@ window.addEventListener('unhandledrejection', function(e) {
  if(el){el.hidden=false;el.textContent='خطای برنامه: '+(e.reason?.message||String(e.reason));}
 });
 </script>
+<style id="ncV32Style">
+:root{--ncwhite:#fff;--ncedge:#e2e7ec}body{background:#f7f9fc!important}
+.viewport{background:#f7f9fc!important}#ncTop{top:12px;padding:6px 8px;border:1px solid var(--ncedge);box-shadow:0 5px 20px #243b5314}#ncLeft{top:94px;bottom:75px;max-width:190px;gap:3px}#ncRight{top:100px;gap:5px}#ncLeft>.ncBtn,#ncLeft>.ncGroup .ncBtn{min-height:39px}#ncSketchGroup{border-left:2px solid #c5d9ec;margin-left:13px;padding-left:8px;gap:3px}#ncBottom{border-radius:13px;bottom:13px;box-shadow:0 5px 18px #13263b1b}#ncRight .ncBtn{min-width:62px;justify-content:center}
+#ncMeasure{display:none!important}#ncLeft .ncSeparator{margin:5px 0}#ncToast{bottom:88px;max-width:50%;font-size:12px}
+@media(max-width:850px){#ncLeft{left:8px;top:88px;max-width:158px}#ncRight{right:8px;top:90px}#ncTop{top:8px}.ncBtn{font-size:12px!important;padding:6px 9px}#ncBottom{max-width:calc(100% - 190px);left:calc(50% + 25px)}#ncToast{max-width:55%}}
+@media(max-width:580px){#ncLeft{max-width:124px}#ncLeft .ncBtn{gap:4px}#ncRight .ncBtn span{display:none}#ncRight .ncBtn{min-width:42px}#ncBottom{max-width:calc(100% - 145px);left:calc(50% + 20px)}}
+</style>
 </head>
 <body>
 <div id="stepSavePanel" role="dialog" aria-modal="true" aria-label="ذخیره فایل STEP"><div id="stepSaveCard"><h3 id="stepSaveTitle">آماده‌سازی خروجی STEP</h3><p id="stepSaveDetails"></p><div id="stepProgressTrack" role="progressbar" aria-label="پیشرفت دریافت STEP" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div id="stepProgressFill"></div></div><div id="stepProgressLabel">آماده‌سازی…</div><button class="primary" id="stepSaveNow">ذخیره فایل STEP</button><button id="stepSaveClose">بستن</button><p class="note">در Safari، پس از لمس ذخیره، پوشه Downloads یا فهرست دانلودهای مرورگر را بررسی کنید.</p></div></div>
 <div id="startupError" hidden style="position:fixed;top:55px;left:10px;right:10px;z-index:99999;background:#8a2931;color:white;padding:12px;border-radius:10px;direction:rtl"></div><div class="app">
 <header>
-  <strong>NiliCAD</strong><span class="tag">v2.9.0 · Sketch-first</span>
+  <strong>NiliCAD</strong><span class="tag">v3.2.0 · Sketch Workspace</span>
   <div class="actions">
     <button id="panelsBtn">قطعات / ابعاد</button><button id="openBtn">بازکردن</button><input type="file" id="fileInput" accept=".json,application/json" hidden><button id="newBtn">پروژه جدید</button><button id="saveBtn">ذخیره</button><button id="featureBtn">تاریخچه</button>
   </div>
@@ -1382,25 +1389,26 @@ function ncPenDown(e){
  if(nc.mode!=='sketch')return;
  if(e.button!==0)return;
  const p=ncPenPoint(e);if(!p)return;
- ncPen.active={id:e.pointerId,start:p,last:p,moved:false};
+ ncPen.active={id:e.pointerId,start:p,last:p,clientX:e.clientX,clientY:e.clientY,moved:false};
  ncTapDown=null;
  try{canvas.setPointerCapture(e.pointerId)}catch(_){}
  e.preventDefault();e.stopImmediatePropagation();
 }
+let ncStrokePreview=null;
 function ncPenMove(e){
  const d=ncPen.active;
  if(!d||d.id!==e.pointerId)return;
- const p=ncPenPoint(e);if(p){d.last=p;if(Math.hypot(e.clientX-(d.clientX??e.clientX),e.clientY-(d.clientY??e.clientY))>3)d.moved=true;}
+ const p=ncPenPoint(e);if(p){d.last=p;if(Math.hypot(e.clientX-d.clientX,e.clientY-d.clientY)>4)d.moved=true;if(ncStrokePreview){nc.group.remove(ncStrokePreview);ncStrokePreview.geometry.dispose();ncStrokePreview.material.dispose();ncStrokePreview=null}if(nc.tool==='line'||nc.tool==='rectangle'){const g=new THREE.BufferGeometry().setFromPoints([nc3(d.start,.35),nc3(p,.35)]);ncStrokePreview=new THREE.Line(g,new THREE.LineBasicMaterial({color:0xe49a23}));nc.group.add(ncStrokePreview)}}
  e.preventDefault();e.stopImmediatePropagation();
 }
 function ncPenUp(e){
  const d=ncPen.active;if(!d||d.id!==e.pointerId)return;
- ncPen.active=null;ncTapDown=null;
+ ncPen.active=null;ncTapDown=null;if(ncStrokePreview){nc.group.remove(ncStrokePreview);ncStrokePreview.geometry.dispose();ncStrokePreview.material.dispose();ncStrokePreview=null}
  const end=ncPenPoint(e)||d.last;
  const distance=Math.hypot(end.x-d.start.x,end.y-d.start.y);
  if(nc.tool==='rectangle'&&distance>.6){ncSketchReset();nc.tool='rectangle';skPoints=[d.start,{x:end.x,y:d.start.y},end,{x:d.start.x,y:end.y}];skSegments=skPoints.map((q,i)=>({kind:'line',a:q,b:skPoints[(i+1)%4]}));skClosed=true;ncDraw()}
  else if(nc.tool==='circle'&&distance>.6){ncSketchReset();nc.tool='circle';skCircle={center:d.start,r:distance};ncDraw()}
- else if(nc.tool==='line'&&distance>.6){if(skClosed)ncSketchReset();skTool='line';if(!skPoints.length)skAdd(d.start);else if(skDistance(skPoints.at(-1),d.start)>.6)skAdd(d.start);skAdd(end);ncDraw()}
+ else if(nc.tool==='line'&&distance>.6){if(skClosed)ncSketchReset();skTool='line';const start=skPoints.length&&skDistance(skPoints.at(-1),d.start)<3?skPoints.at(-1):d.start;if(!skPoints.length)skAdd(start);else if(skDistance(skPoints.at(-1),start)>.6)skAdd(start);const finish=skPoints.length>=3&&skDistance(end,skPoints[0])<3?skPoints[0]:end;skAdd(finish);ncDraw()}
  else ncTap(end);
  e.preventDefault();e.stopImmediatePropagation();
 }
@@ -1437,7 +1445,7 @@ requestAnimationFrame(()=>{skW.classList.remove('open');ncSketchReset();ncSetToo
 </div>
 <button class="ncBtn" id="ncExit"><span class="ncIcon">✓</span>Exit Sketching</button>
 <div class="ncSeparator"></div><button class="ncBtn" id="ncConstruct" disabled><span class="ncIcon">⬡</span>Construct · مرحله بعد</button><button class="ncBtn" id="ncTransform" disabled><span class="ncIcon">✥</span>Transform · مرحله بعد</button><button class="ncBtn" id="ncTools" disabled><span class="ncIcon">⚒</span>Tools · مرحله بعد</button></div>
-<div id="ncRight"><button class="ncBtn" id="ncTopView">TOP</button><button class="ncBtn" id="ncIsoView">◇ ISO</button><button class="ncBtn" id="ncGrid"># Grid</button><div class="ncSeparator"></div><button class="ncBtn" disabled>Parallel</button><button class="ncBtn" disabled>Perpendicular</button><button class="ncBtn" disabled>Tangent</button><button class="ncBtn" disabled>Coincident</button><button class="ncBtn" disabled>Concentric</button><button class="ncBtn" disabled>Equal</button></div>
+<div id="ncRight"><button class="ncBtn" id="ncTopView" title="نمای بالا">▱ <span>Top</span></button><button class="ncBtn" id="ncIsoView" title="نمای ایزومتریک">⬡ <span>3D</span></button><button class="ncBtn" id="ncGrid" title="نمایش شبکه">▦ <span>Grid</span></button><button class="ncBtn" id="ncConstraints" disabled title="قیود هندسی در مرحله بعد">⌁ <span>Constraints</span></button></div><button class="ncBtn" disabled>Parallel</button><button class="ncBtn" disabled>Perpendicular</button><button class="ncBtn" disabled>Tangent</button><button class="ncBtn" disabled>Coincident</button><button class="ncBtn" disabled>Concentric</button><button class="ncBtn" disabled>Equal</button></div>
 <div id="ncBottom"><span class="ncSmall" id="ncStatus">Sketch · صفحه XZ · واحد mm</span><button class="ncBtn" id="ncExtrude" disabled>↥ Extrude</button><button class="ncBtn" id="ncConfirm" style="display:none">✓ ایجاد حجم</button></div>
 <div id="ncPull"><div class="handle">↑</div><input id="ncDepth" type="number" value="20" min="0.1" step="0.5" aria-label="Extrude depth in millimeters"><span class="ncSmall">mm</span></div><div id="ncMeasure"></div><div id="ncToast"></div>
 <div id="cadBuild" style="position:fixed;bottom:3px;right:7px;z-index:1;font:10px sans-serif;color:#81919e;pointer-events:none">NiliCAD v3.1.0</div>
