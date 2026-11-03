@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>NiliCAD v3.9.0</title>
+<title>NiliCAD v4.0.0</title>
 <style>
 :root{color-scheme:dark;--bg:#111820;--panel:#1a2530;--panel2:#202e3b;--line:#344554;--text:#e8eef4;--muted:#9aabba;--accent:#55b7a7;--accent2:#397eae}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font-family:Tahoma,Arial,sans-serif;overflow:hidden}
@@ -1135,7 +1135,10 @@ function performBoolean(a,b,op,opts={}){
   const center=g.boundingBox.getCenter(new THREE.Vector3());
   const size=g.boundingBox.getSize(new THREE.Vector3());
   g.translate(-center.x,-center.y,-center.z);if(!g.attributes.normal)g.computeVertexNormals();g.computeBoundingSphere();
-  const exactRecipe={op,left:makeExactNode(a),right:makeExactNode(b)};
+  // Mesh Boolean must succeed independently of optional exact STEP history.
+  let exactRecipe=null;
+  try {exactRecipe={op,left:makeExactNode(a),right:makeExactNode(b)}}
+  catch(historyError){console.info('STEP B-Rep history unavailable; mesh Boolean is still valid:',historyError.message)}
   snapshot();
   gizmo.detach();gizmoMode=null;
   for(const o of [a,b]){if(o===b&&opts.temporaryCutter)continue;world.remove(o.mesh);o.mesh.geometry.dispose()}
@@ -1151,7 +1154,7 @@ function performBoolean(a,b,op,opts={}){
   items.push(obj);
   operationLog.push({objectId:id,kind:op,tool:b.name||"سوراخ"});
   booleanPending=null;booleanBanner.classList.remove('active');
-  select(obj);refreshList();toast('عملیات انجام شد؛ نتیجه قابل انتخاب و تفریق مجدد است');
+  select(obj);refreshList();toast('عملیات حجمی انجام شد'+(exactRecipe?'؛ تاریخچه STEP موجود است':'؛ خروجی STEP دقیق برای این نتیجه هنوز پشتیبانی نمی‌شود'));
  }catch(err){cancelBoolean();ncMessage('خطای Boolean: '+err.message);alert('خطای عملیات هندسی: '+err.message);console.error(err)}
 }
 
@@ -1466,7 +1469,7 @@ const ncItemsPanel=document.querySelector('.panel.left');
 document.getElementById('ncItems').onclick=()=>{const open=ncItemsPanel.classList.toggle('ncItemsVisible');document.getElementById('ncItems').classList.toggle('active',open);ncMessage(open?'فهرست قطعات باز شد':'فهرست قطعات بسته شد')};
 document.getElementById('ncHome').onclick=()=>document.getElementById('newBtn').click();document.getElementById('ncMenu').onclick=()=>{const answer=prompt('مدیریت پروژه: 1 ذخیره، 2 بازکردن، 3 STEP، 4 STL','1');if(answer==='1')document.getElementById('saveBtn').click();else if(answer==='2')document.getElementById('openBtn').click();else if(answer==='3')document.getElementById('stepBtn').click();else if(answer==='4')document.getElementById('stlBtn').click()};
 // A consistent versioned project serializer. The older import rejected valid geometry variants.
-document.getElementById('saveBtn').onclick=()=>{try{const data={format:'NiliCAD-Web',version:'3.9',units:'mm',sketchRegions:ncRegions.map(r=>({segments:r.segments,points:r.points,circle:r.circle})),objects:items.map(o=>({name:o.name,type:o.type,dimensions:{...o.dims},geometryJSON:o.type==='booleanMesh'?o.mesh.geometry.toJSON():null,plane:o.plane||'XY',operations:o.operations||[],exactRecipe:o.exactRecipe||null,exactBaseMatrix:o.exactBaseMatrix||null,featureMaster:o.featureMaster||null,sketch:o.sketch||null,position:o.mesh.position.toArray(),rotation:[o.mesh.rotation.x,o.mesh.rotation.y,o.mesh.rotation.z],scale:o.mesh.scale.toArray()}))};download(new Blob([JSON.stringify(data)],{type:'application/json'}),'NiliCAD-project-v3.9.json');ncMessage('پروژه ذخیره شد')}catch(err){alert('خطای ذخیره: '+err.message)}};
+document.getElementById('saveBtn').onclick=()=>{try{const data={format:'NiliCAD-Web',version:'3.9',units:'mm',sketchRegions:ncRegions.map(r=>({segments:r.segments,points:r.points,circle:r.circle})),objects:items.map(o=>({name:o.name,type:o.type,dimensions:{...o.dims},geometryJSON:o.type==='booleanMesh'?o.mesh.geometry.toJSON():null,plane:o.plane||'XY',operations:o.operations||[],exactRecipe:o.exactRecipe||null,exactBaseMatrix:o.exactBaseMatrix||null,featureMaster:o.featureMaster||null,sketch:o.sketch||null,position:o.mesh.position.toArray(),rotation:[o.mesh.rotation.x,o.mesh.rotation.y,o.mesh.rotation.z],scale:o.mesh.scale.toArray()}))};download(new Blob([JSON.stringify(data)],{type:'application/json'}),'NiliCAD-project-v4.0.json');ncMessage('پروژه ذخیره شد')}catch(err){alert('خطای ذخیره: '+err.message)}};
 document.getElementById('fileInput').onchange=async e=>{const file=e.target.files?.[0];if(!file)return;try{const d=JSON.parse(await file.text());if(!Array.isArray(d.objects)||d.format!=='NiliCAD-Web')throw Error('فایل پروژه NiliCAD نیست');const newItems=d.objects.map((o,i)=>{const dims=o.dimensions||o.dims||{},type=o.type;let geo;if(type==='booleanMesh'){const json=o.geometryJSON||dims.geometryJSON||o.meshGeometry||null;if(!json)throw Error('هندسه قطعه '+(i+1)+' در فایل وجود ندارد');geo=new THREE.BufferGeometryLoader().parse(json)}else geo=geometry(type,dims);const mesh=new THREE.Mesh(geo,mat.clone());mesh.position.fromArray(o.position||o.pos||[0,0,0]);const rot=o.rotation||o.rot||[0,0,0];mesh.rotation.set(rot[0],rot[1],rot[2]);mesh.scale.fromArray(o.scale||[1,1,1]);mesh.userData.objectId=i+1;return{id:i+1,name:o.name||'Body '+(i+1),type,dims,mesh,plane:o.plane||'XY',operations:o.operations||[],exactRecipe:o.exactRecipe||null,exactBaseMatrix:o.exactBaseMatrix||null,featureMaster:o.featureMaster||null,sketch:o.sketch||null}});snapshot();items.forEach(o=>{world.remove(o.mesh);o.mesh.geometry.dispose()});items=newItems;ncClearRegions();items.forEach(o=>world.add(o.mesh));
  for(const r of (Array.isArray(d.sketchRegions)?d.sketchRegions:[])){
   if(!Array.isArray(r.segments)||!Array.isArray(r.points))continue;
@@ -1514,7 +1517,8 @@ function ncPenDown(e){
   const rr=canvas.getBoundingClientRect();
   pointer.set((e.clientX-rr.left)/rr.width*2-1,-(e.clientY-rr.top)/rr.height*2+1);
   raycaster.setFromCamera(pointer,camera);
-  const hits=raycaster.intersectObjects(items.map(o=>o.mesh).filter(m=>m!==booleanPending.base.mesh),false);
+  const hits=raycaster.intersectObjects(items.map(o=>o.mesh),false);
+  if(hits.length && hits[0].object===booleanPending.base.mesh){ncMessage('حجم اول انتخاب شده؛ روی بخش قابل مشاهده حجم دوم بزنید');e.preventDefault();e.stopImmediatePropagation();return}
   if(hits.length){
    const second=items.find(o=>o.mesh===hits[0].object);
    if(second)performBoolean(booleanPending.base,second,booleanPending.op);
@@ -1579,8 +1583,8 @@ canvas.addEventListener('pointerup',e=>{
  if(Math.hypot(e.clientX-t.x,e.clientY-t.y)>12)return;
  const r=canvas.getBoundingClientRect();pointer.set((e.clientX-r.left)/r.width*2-1,-(e.clientY-r.top)/r.height*2+1);
  raycaster.setFromCamera(pointer,camera);
- const hit=raycaster.intersectObjects(items.map(o=>o.mesh).filter(m=>m!==booleanPending.base.mesh),false)[0];
- if(hit){const b=items.find(o=>o.mesh===hit.object);if(b)performBoolean(booleanPending.base,b,booleanPending.op)}
+ const hit=raycaster.intersectObjects(items.map(o=>o.mesh),false)[0];
+ if(hit&&hit.object!==booleanPending.base.mesh){const b=items.find(o=>o.mesh===hit.object);if(b)performBoolean(booleanPending.base,b,booleanPending.op)}
  e.stopImmediatePropagation();e.preventDefault();
 },true);
 canvas.addEventListener('pointerdown',ncPenDown,true);
@@ -1599,7 +1603,7 @@ skOpen=function(){ncSketchReset();nc.mode='sketch';ncSetTool('line')};
 requestAnimationFrame(()=>{skW.classList.remove('open');ncSketchReset();ncSetTool('line')});
 
 </script>
-<input type="file" id="ncMeshFile" accept=".stl,.obj,.3mf" hidden><div id="ncTop"><button class="ncBtn" id="ncHome">⌂</button><span class="ncTitle">NiliCAD v3.9.0 · <span id="ncProject">Untitled Project</span></span><button class="ncBtn" id="ncMenu">•••</button></div>
+<input type="file" id="ncMeshFile" accept=".stl,.obj,.3mf" hidden><div id="ncTop"><button class="ncBtn" id="ncHome">⌂</button><span class="ncTitle">NiliCAD v4.0.0 · <span id="ncProject">Untitled Project</span></span><button class="ncBtn" id="ncMenu">•••</button></div>
 <div id="ncLeft"><button class="ncBtn" id="ncItems"><span class="ncIcon">▱</span>Items</button><div class="ncSeparator"></div>
 <button class="ncBtn active" id="ncSketch"><span class="ncIcon">⌒</span><b>Sketch</b></button>
 <div class="ncGroup open" id="ncSketchGroup">
@@ -1619,7 +1623,7 @@ requestAnimationFrame(()=>{skW.classList.remove('open');ncSketchReset();ncSetToo
 <div id="ncRight"><button class="ncBtn" id="ncTopView" title="نمای بالا">▱ <span>Top</span></button><button class="ncBtn" id="ncIsoView" title="نمای ایزومتریک">⬡ <span>3D</span></button><button class="ncBtn" id="ncGrid" title="نمایش شبکه">▦ <span>Grid</span></button><button class="ncBtn" id="ncConstraints" disabled title="قیود هندسی در مرحله بعد">⌁ <span>Constraints</span></button></div>
 <div id="ncBottom"><span class="ncSmall" id="ncStatus">Sketch · صفحه XZ · واحد mm</span><button class="ncBtn" id="ncExtrude" disabled>↥ Extrude</button><button class="ncBtn" id="ncConfirm" style="display:none">✓ ایجاد حجم</button></div>
 <div id="ncPull"><div class="handle">↑</div><input id="ncDepth" type="number" value="0" step="0.5" aria-label="Extrude depth in millimeters"><span class="ncSmall">mm</span></div><div id="ncMeasure"></div><div id="ncToast"></div>
-<div id="cadBuild" style="position:fixed;bottom:3px;right:7px;z-index:1;font:10px sans-serif;color:#81919e;pointer-events:none">NiliCAD v3.9.0</div>
+<div id="cadBuild" style="position:fixed;bottom:3px;right:7px;z-index:1;font:10px sans-serif;color:#81919e;pointer-events:none">NiliCAD v4.0.0</div>
 <div id="cadServerPanel" style="display:none;position:fixed;inset:0;z-index:99990;background:#0009;align-items:center;justify-content:center;direction:rtl">
  <div style="background:#1e293b;color:white;border:1px solid #64748b;border-radius:16px;padding:20px;width:min(440px,92vw);box-shadow:0 12px 45px #0009">
   <h3 style="margin:0 0 12px">انتخاب محل موتور Open CASCADE</h3>
