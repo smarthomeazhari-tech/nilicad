@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>NiliCAD v3.8.0</title>
+<title>NiliCAD v3.9.0</title>
 <style>
 :root{color-scheme:dark;--bg:#111820;--panel:#1a2530;--panel2:#202e3b;--line:#344554;--text:#e8eef4;--muted:#9aabba;--accent:#55b7a7;--accent2:#397eae}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font-family:Tahoma,Arial,sans-serif;overflow:hidden}
@@ -1079,20 +1079,40 @@ let booleanPending=null, booleanModule=null;
 const booleanBanner=document.getElementById('booleanBanner');
 document.getElementById('booleanCancel').onclick=()=>cancelBoolean();
 function cancelBoolean(){booleanPending=null;booleanBanner.classList.remove('active');toast('عملیات لغو شد')}
+async function loadBooleanEngine(){
+ if(booleanModule)return booleanModule;
+ const sources=[
+  'https://cdn.jsdelivr.net/npm/three-bvh-csg@0.0.17/+esm',
+  'https://esm.sh/three-bvh-csg@0.0.17?bundle'
+ ];
+ let lastError;
+ for(const url of sources){
+  try{
+   const m=await import(url);
+   if(typeof m.Evaluator!=='function'||typeof m.Brush!=='function'||m.ADDITION===undefined)throw Error('API موتور ناقص است');
+   booleanModule=m;return m;
+  }catch(e){lastError=e;console.warn('Boolean engine source failed',url,e)}
+ }
+ throw lastError||Error('موتور بارگذاری نشد');
+}
 async function beginBoolean(op){
- if(!selected){toast('ابتدا حجم اول را انتخاب کنید');return}
+ if(!selected){ncMessage('ابتدا حجم اول را با قلم انتخاب کنید');toast('حجم اول انتخاب نشده است');return}
  if(draftMode)endDraft();
  if(gizmoMode){gizmo.detach();gizmoMode=null;controls.enabled=true}
- try{
-  if(!booleanModule){
-   try{booleanModule=await import('https://esm.sh/three-bvh-csg@0.0.17?external=three')}
-   catch(_){booleanModule=await import('https://cdn.jsdelivr.net/npm/three-bvh-csg@0.0.17/+esm')}
-  }
- }catch(err){toast('بارگذاری موتور Boolean ناموفق بود؛ اتصال اینترنت را بررسی کنید');return}
+ nc.mode='select';
  booleanPending={base:selected,op};
  booleanBanner.classList.add('active');
- document.getElementById('booleanText').textContent=({union:'اتصال',subtract:'تفریق',intersect:'اشتراک'}[op])+' — اکنون حجم دوم را روی صفحه یا در فهرست قطعات انتخاب کنید';
- toast('حجم دوم را انتخاب کنید');
+ document.getElementById('booleanText').textContent='در حال آماده‌سازی موتور هندسی…';
+ try{
+  await loadBooleanEngine();
+  if(!booleanPending)return;
+  document.getElementById('booleanText').textContent=({union:'اتصال',subtract:'تفریق',intersect:'اشتراک'}[op])+' — حجم دوم را لمس کنید';
+  ncMessage('حجم اول: '+selected.name+'؛ حالا حجم دوم را انتخاب کنید');
+ }catch(err){
+  booleanPending=null;booleanBanner.classList.remove('active');
+  const message='موتور Boolean بارگذاری نشد: '+err.message;
+  ncMessage(message);alert(message);
+ }
 }
 function brushFor(o){
  o.mesh.updateMatrixWorld(true);
@@ -1102,10 +1122,13 @@ function brushFor(o){
  return b;
 }
 function performBoolean(a,b,op,opts={}){
- if(!booleanModule||a===b){cancelBoolean();return}
+ if(!booleanModule||a===b){ncMessage('دو حجم متفاوت لازم است');cancelBoolean();return}
  try{
   const {Evaluator,ADDITION,SUBTRACTION,INTERSECTION}=booleanModule;
-  const result=new Evaluator().evaluate(brushFor(a),brushFor(b),({union:ADDITION,subtract:SUBTRACTION,intersect:INTERSECTION})[op]);
+  const evaluator=new Evaluator();
+  const brushA=brushFor(a),brushB=brushFor(b);
+  brushA.geometry.computeVertexNormals();brushB.geometry.computeVertexNormals();
+  const result=evaluator.evaluate(brushA,brushB,({union:ADDITION,subtract:SUBTRACTION,intersect:INTERSECTION})[op]);
   const g=result.geometry.clone();
   g.computeBoundingBox();
   if(!g.attributes.position||g.attributes.position.count===0||g.boundingBox.isEmpty()){toast('نتیجه هندسی خالی است');cancelBoolean();return}
@@ -1129,7 +1152,7 @@ function performBoolean(a,b,op,opts={}){
   operationLog.push({objectId:id,kind:op,tool:b.name||"سوراخ"});
   booleanPending=null;booleanBanner.classList.remove('active');
   select(obj);refreshList();toast('عملیات انجام شد؛ نتیجه قابل انتخاب و تفریق مجدد است');
- }catch(err){cancelBoolean();toast('عملیات هندسی ناموفق بود: '+err.message);console.error(err)}
+ }catch(err){cancelBoolean();ncMessage('خطای Boolean: '+err.message);alert('خطای عملیات هندسی: '+err.message);console.error(err)}
 }
 
 
@@ -1443,7 +1466,7 @@ const ncItemsPanel=document.querySelector('.panel.left');
 document.getElementById('ncItems').onclick=()=>{const open=ncItemsPanel.classList.toggle('ncItemsVisible');document.getElementById('ncItems').classList.toggle('active',open);ncMessage(open?'فهرست قطعات باز شد':'فهرست قطعات بسته شد')};
 document.getElementById('ncHome').onclick=()=>document.getElementById('newBtn').click();document.getElementById('ncMenu').onclick=()=>{const answer=prompt('مدیریت پروژه: 1 ذخیره، 2 بازکردن، 3 STEP، 4 STL','1');if(answer==='1')document.getElementById('saveBtn').click();else if(answer==='2')document.getElementById('openBtn').click();else if(answer==='3')document.getElementById('stepBtn').click();else if(answer==='4')document.getElementById('stlBtn').click()};
 // A consistent versioned project serializer. The older import rejected valid geometry variants.
-document.getElementById('saveBtn').onclick=()=>{try{const data={format:'NiliCAD-Web',version:'3.8',units:'mm',objects:items.map(o=>({name:o.name,type:o.type,dimensions:{...o.dims},geometryJSON:o.type==='booleanMesh'?o.mesh.geometry.toJSON():null,plane:o.plane||'XY',operations:o.operations||[],exactRecipe:o.exactRecipe||null,exactBaseMatrix:o.exactBaseMatrix||null,featureMaster:o.featureMaster||null,sketch:o.sketch||null,position:o.mesh.position.toArray(),rotation:[o.mesh.rotation.x,o.mesh.rotation.y,o.mesh.rotation.z],scale:o.mesh.scale.toArray()}))};download(new Blob([JSON.stringify(data)],{type:'application/json'}),'NiliCAD-project-v3.8.json');ncMessage('پروژه ذخیره شد')}catch(err){alert('خطای ذخیره: '+err.message)}};
+document.getElementById('saveBtn').onclick=()=>{try{const data={format:'NiliCAD-Web',version:'3.9',units:'mm',sketchRegions:ncRegions.map(r=>({segments:r.segments,points:r.points,circle:r.circle})),objects:items.map(o=>({name:o.name,type:o.type,dimensions:{...o.dims},geometryJSON:o.type==='booleanMesh'?o.mesh.geometry.toJSON():null,plane:o.plane||'XY',operations:o.operations||[],exactRecipe:o.exactRecipe||null,exactBaseMatrix:o.exactBaseMatrix||null,featureMaster:o.featureMaster||null,sketch:o.sketch||null,position:o.mesh.position.toArray(),rotation:[o.mesh.rotation.x,o.mesh.rotation.y,o.mesh.rotation.z],scale:o.mesh.scale.toArray()}))};download(new Blob([JSON.stringify(data)],{type:'application/json'}),'NiliCAD-project-v3.9.json');ncMessage('پروژه ذخیره شد')}catch(err){alert('خطای ذخیره: '+err.message)}};
 document.getElementById('fileInput').onchange=async e=>{const file=e.target.files?.[0];if(!file)return;try{const d=JSON.parse(await file.text());if(!Array.isArray(d.objects)||d.format!=='NiliCAD-Web')throw Error('فایل پروژه NiliCAD نیست');const newItems=d.objects.map((o,i)=>{const dims=o.dimensions||o.dims||{},type=o.type;let geo;if(type==='booleanMesh'){const json=o.geometryJSON||dims.geometryJSON||o.meshGeometry||null;if(!json)throw Error('هندسه قطعه '+(i+1)+' در فایل وجود ندارد');geo=new THREE.BufferGeometryLoader().parse(json)}else geo=geometry(type,dims);const mesh=new THREE.Mesh(geo,mat.clone());mesh.position.fromArray(o.position||o.pos||[0,0,0]);const rot=o.rotation||o.rot||[0,0,0];mesh.rotation.set(rot[0],rot[1],rot[2]);mesh.scale.fromArray(o.scale||[1,1,1]);mesh.userData.objectId=i+1;return{id:i+1,name:o.name||'Body '+(i+1),type,dims,mesh,plane:o.plane||'XY',operations:o.operations||[],exactRecipe:o.exactRecipe||null,exactBaseMatrix:o.exactBaseMatrix||null,featureMaster:o.featureMaster||null,sketch:o.sketch||null}});snapshot();items.forEach(o=>{world.remove(o.mesh);o.mesh.geometry.dispose()});items=newItems;ncClearRegions();items.forEach(o=>world.add(o.mesh));
  for(const r of (Array.isArray(d.sketchRegions)?d.sketchRegions:[])){
   if(!Array.isArray(r.segments)||!Array.isArray(r.points))continue;
@@ -1477,7 +1500,7 @@ const ncPen={active:null};
 function ncPenPoint(e){return ncPlanePoint(e)}
 function ncPenDown(e){
  if(e.pointerType!=='pen' && e.pointerType!=='mouse')return;
- if(nc.mode==='pull'){
+ if(nc.mode==='pull'&&!booleanPending){
   if(e.button!==0)return;
   const rect=canvas.getBoundingClientRect();pointer.set((e.clientX-rect.left)/rect.width*2-1,-(e.clientY-rect.top)/rect.height*2+1);
   raycaster.setFromCamera(pointer,camera);
@@ -1576,7 +1599,7 @@ skOpen=function(){ncSketchReset();nc.mode='sketch';ncSetTool('line')};
 requestAnimationFrame(()=>{skW.classList.remove('open');ncSketchReset();ncSetTool('line')});
 
 </script>
-<input type="file" id="ncMeshFile" accept=".stl,.obj,.3mf" hidden><div id="ncTop"><button class="ncBtn" id="ncHome">⌂</button><span class="ncTitle">NiliCAD v3.8.0 · <span id="ncProject">Untitled Project</span></span><button class="ncBtn" id="ncMenu">•••</button></div>
+<input type="file" id="ncMeshFile" accept=".stl,.obj,.3mf" hidden><div id="ncTop"><button class="ncBtn" id="ncHome">⌂</button><span class="ncTitle">NiliCAD v3.9.0 · <span id="ncProject">Untitled Project</span></span><button class="ncBtn" id="ncMenu">•••</button></div>
 <div id="ncLeft"><button class="ncBtn" id="ncItems"><span class="ncIcon">▱</span>Items</button><div class="ncSeparator"></div>
 <button class="ncBtn active" id="ncSketch"><span class="ncIcon">⌒</span><b>Sketch</b></button>
 <div class="ncGroup open" id="ncSketchGroup">
@@ -1596,7 +1619,7 @@ requestAnimationFrame(()=>{skW.classList.remove('open');ncSketchReset();ncSetToo
 <div id="ncRight"><button class="ncBtn" id="ncTopView" title="نمای بالا">▱ <span>Top</span></button><button class="ncBtn" id="ncIsoView" title="نمای ایزومتریک">⬡ <span>3D</span></button><button class="ncBtn" id="ncGrid" title="نمایش شبکه">▦ <span>Grid</span></button><button class="ncBtn" id="ncConstraints" disabled title="قیود هندسی در مرحله بعد">⌁ <span>Constraints</span></button></div>
 <div id="ncBottom"><span class="ncSmall" id="ncStatus">Sketch · صفحه XZ · واحد mm</span><button class="ncBtn" id="ncExtrude" disabled>↥ Extrude</button><button class="ncBtn" id="ncConfirm" style="display:none">✓ ایجاد حجم</button></div>
 <div id="ncPull"><div class="handle">↑</div><input id="ncDepth" type="number" value="0" step="0.5" aria-label="Extrude depth in millimeters"><span class="ncSmall">mm</span></div><div id="ncMeasure"></div><div id="ncToast"></div>
-<div id="cadBuild" style="position:fixed;bottom:3px;right:7px;z-index:1;font:10px sans-serif;color:#81919e;pointer-events:none">NiliCAD v3.8.0</div>
+<div id="cadBuild" style="position:fixed;bottom:3px;right:7px;z-index:1;font:10px sans-serif;color:#81919e;pointer-events:none">NiliCAD v3.9.0</div>
 <div id="cadServerPanel" style="display:none;position:fixed;inset:0;z-index:99990;background:#0009;align-items:center;justify-content:center;direction:rtl">
  <div style="background:#1e293b;color:white;border:1px solid #64748b;border-radius:16px;padding:20px;width:min(440px,92vw);box-shadow:0 12px 45px #0009">
   <h3 style="margin:0 0 12px">انتخاب محل موتور Open CASCADE</h3>
