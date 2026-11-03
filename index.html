@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>NiliCAD Web Preview v2.4.0</title>
+<title>NiliCAD Web Preview v2.5.0</title>
 <style>
 :root{color-scheme:dark;--bg:#111820;--panel:#1a2530;--panel2:#202e3b;--line:#344554;--text:#e8eef4;--muted:#9aabba;--accent:#55b7a7;--accent2:#397eae}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font-family:Tahoma,Arial,sans-serif;overflow:hidden}
@@ -109,6 +109,19 @@ header{background:#0d1928;border-bottom-color:#26384c}header strong{font-size:21
 #featurePanel{position:absolute;z-index:17;top:12px;right:12px;width:min(320px,calc(100% - 85px));max-height:70%;overflow:auto;background:#102337f5;border:1px solid #4b7ba7;border-radius:13px;padding:12px;display:none;direction:rtl;box-shadow:0 10px 30px #0009}
 #featurePanel.open{display:block}#featurePanel .featRow{display:flex;gap:5px;align-items:center;justify-content:space-between;border-bottom:1px solid #344b60;padding:7px 2px;font-size:12px}
 #featurePanel .featRow button{font-size:11px;padding:5px 7px}#featurePanel h3{margin:4px 0 8px}#featurePanel .featHint{font-size:11px;color:#b7c9d8;line-height:1.8}
+
+/* v2.5: touch-first grouped tool system, independently designed */
+#cadSide{width:190px;background:#101d2deF;border-color:#31465d;gap:3px}
+#cadSide .sideTitle{font-weight:bold;letter-spacing:.2px;color:#9fb8d1;margin-top:5px}
+#cadSide button{border:1px solid transparent;transition:background .12s;min-height:44px}
+#cadSide button.heroTool,#cadDock button.heroTool{background:#15599e;border:1px solid #3b9afa;color:white}
+#cadSide button.heroTool:hover,#cadDock button.heroTool:hover{background:#1d70c3}
+#cadDock{left:calc(50% + 100px);max-width:calc(100% - 220px);gap:5px;padding:7px 9px;border-radius:16px}
+#cadDock button{min-width:67px;min-height:57px}
+#cadMore{left:calc(50% + 100px);max-width:calc(100% - 220px);display:none;max-height:55%;overflow:auto;align-content:start}
+#cadMore.open{display:flex}#cadMore button{min-width:110px;flex:1 1 auto;text-align:center}
+@media(max-width:850px){#cadSide{width:64px}#cadSide button{min-height:46px}#cadSide .ico{font-size:24px}#cadDock{left:calc(50% + 37px);max-width:calc(100% - 84px)}#cadDock button{min-width:52px;min-height:51px;font-size:10px}#cadMore{left:calc(50% + 37px);max-width:calc(100% - 84px)}}
+@media(max-width:600px){#cadDock{gap:2px;padding:5px 3px}#cadDock button{min-width:48px;padding:5px 3px;font-size:9px}#cadDock button .sym{font-size:19px}#cadMore{bottom:70px}}
 </style>
 <script type="importmap">
 {"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.164.1/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.164.1/examples/jsm/"}}
@@ -128,7 +141,7 @@ window.addEventListener('unhandledrejection', function(e) {
 <div id="stepSavePanel" role="dialog" aria-modal="true" aria-label="ذخیره فایل STEP"><div id="stepSaveCard"><h3 id="stepSaveTitle">آماده‌سازی خروجی STEP</h3><p id="stepSaveDetails"></p><div id="stepProgressTrack" role="progressbar" aria-label="پیشرفت دریافت STEP" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div id="stepProgressFill"></div></div><div id="stepProgressLabel">آماده‌سازی…</div><button class="primary" id="stepSaveNow">ذخیره فایل STEP</button><button id="stepSaveClose">بستن</button><p class="note">در Safari، پس از لمس ذخیره، پوشه Downloads یا فهرست دانلودهای مرورگر را بررسی کنید.</p></div></div>
 <div id="startupError" hidden style="position:fixed;top:55px;left:10px;right:10px;z-index:99999;background:#8a2931;color:white;padding:12px;border-radius:10px;direction:rtl"></div><div class="app">
 <header>
-  <strong>NiliCAD</strong><span class="tag">WEB PREVIEW · v2.4.0 · Context Tools</span>
+  <strong>NiliCAD</strong><span class="tag">WEB PREVIEW · v2.5.0 · Context Tools</span>
   <div class="actions">
     <button id="panelsBtn">قطعات / ابعاد</button><button id="openBtn">بازکردن</button><input type="file" id="fileInput" accept=".json,application/json" hidden><button id="newBtn">پروژه جدید</button><button id="saveBtn">ذخیره</button><button id="featureBtn">تاریخچه</button>
   </div>
@@ -154,28 +167,43 @@ window.addEventListener('unhandledrejection', function(e) {
   </aside>
   <section class="viewport">
 <div id="directPalette"><button data-act="translate">↔ حرکت</button><button data-act="rotate">⟳ چرخش</button><button data-act="scale">⤢ اندازه</button><button data-act="hole">◉ سوراخ</button><button data-act="copy">⧉ کپی</button><button data-act="delete">⌫ حذف</button><button data-act="close">×</button></div><div id="directHint">روی یک حجم لمس کنید؛ ابزارها کنار همان حجم ظاهر می‌شوند</div>
-    <aside id="cadSide" aria-label="ابزارهای مدل‌سازی">
-<div class="sideTitle">ابزارهای طراحی</div>
-<button data-tool="select"><span class="ico">↖</span><span class="toolLabel">انتخاب</span></button>
-<button data-tool="sketch"><span class="ico">✎</span><span class="toolLabel">مستطیل</span></button>
-<button data-tool="circle"><span class="ico">◯</span><span class="toolLabel">دایره</span></button>
-<button data-tool="box"><span class="ico">⬡</span><span class="toolLabel">افزودن حجم</span></button>
-<div class="sideDivider"></div>
+    <aside id="cadSide" aria-label="ابزارهای طراحی">
+<div class="sideTitle">طراحی</div>
+<button data-tool="paramSketch" class="heroTool"><span class="ico">✎</span><span class="toolLabel">Sketch حرفه‌ای</span></button>
+<button data-tool="select"><span class="ico">⌖</span><span class="toolLabel">انتخاب</span></button>
+<div class="sideDivider"></div><div class="sideTitle">ترسیم مستقیم</div>
+<button data-tool="sketch"><span class="ico">▭</span><span class="toolLabel">مستطیل لمسی</span></button>
+<button data-tool="circle"><span class="ico">◯</span><span class="toolLabel">دایره لمسی</span></button>
+<div class="sideDivider"></div><div class="sideTitle">مدل‌سازی</div>
+<button data-tool="primitives"><span class="ico">⬡</span><span class="toolLabel">احجام اولیه</span></button>
 <button data-tool="hole"><span class="ico">◎</span><span class="toolLabel">سوراخ‌کاری</span></button>
-<button data-tool="move"><span class="ico">✥</span><span class="toolLabel">جابه‌جایی</span></button>
-<button data-tool="rotate"><span class="ico">↻</span><span class="toolLabel">چرخش</span></button>
-<button data-tool="scale"><span class="ico">⤢</span><span class="toolLabel">تغییر مقیاس</span></button>
-<button data-tool="fillet"><span class="ico">◠</span><span class="toolLabel">گردکردن گوشه</span></button>
-<button data-tool="chamfer"><span class="ico">◢</span><span class="toolLabel">پخ‌زدن گوشه</span></button>
+<button data-tool="transform"><span class="ico">✥</span><span class="toolLabel">تبدیل / حرکت</span></button>
+<button data-tool="booleanMenu"><span class="ico">⊕</span><span class="toolLabel">عملیات Boolean</span></button>
+<button data-tool="edges"><span class="ico">◠</span><span class="toolLabel">گوشه‌ها</span></button>
 <div class="sideDivider"></div>
-<button data-tool="copy"><span class="ico">▣</span><span class="toolLabel">کپی</span></button>
-<button data-tool="delete"><span class="ico">⌫</span><span class="toolLabel">حذف</span></button>
-<div class="sideDivider"></div><button data-tool="union"><span class="ico">⊕</span><span class="toolLabel">اتصال احجام</span></button><button data-tool="subtract"><span class="ico">⊖</span><span class="toolLabel">تفریق احجام</span></button><button data-tool="intersect"><span class="ico">∩</span><span class="toolLabel">اشتراک احجام</span></button><button data-tool="undo"><span class="ico">↶</span><span class="toolLabel">بازگشت</span></button>
-<button data-tool="redo"><span class="ico">↷</span><span class="toolLabel">تکرار</span></button>
+<button data-tool="history"><span class="ico">☷</span><span class="toolLabel">تاریخچه</span></button>
+<button data-tool="exportMenu"><span class="ico">⇩</span><span class="toolLabel">خروجی</span></button>
 </aside>
 <div id="featurePanel"><h3>تاریخچه پارامتریک</h3><div class="featHint">برای ویرایش ابعاد یا دوران، روی «ویرایش» بزنید. عملیات Boolean را می‌توان موقتاً غیرفعال کرد.</div><div id="featureRows"></div><button id="featureClose">بستن</button></div><canvas id="view"></canvas><div id="booleanBanner"><div id="booleanText">حجم دوم را انتخاب کنید</div><button id="booleanCancel">لغو</button></div>
-<div id="cadMore" aria-label="ابزارهای بیشتر"><button data-tool="box">مکعب</button><button data-tool="cyl">استوانه</button><button data-tool="sphere">کره</button><button data-tool="cone">مخروط</button><button data-tool="hex">شش‌ضلعی</button><button data-tool="union">اتصال Union</button><button data-tool="subtract">تفریق Subtract</button><button data-tool="intersect">اشتراک Intersect</button><button data-tool="fillet">Fillet</button><button data-tool="chamfer">Chamfer</button><button data-tool="stl">STL</button><button data-tool="step">STEP</button><button data-tool="undo">Undo</button><button data-tool="redo">Redo</button></div>
-<div id="cadDock" aria-label="ابزارهای انتخابی طراحی"><button data-tool="sketch"><span class="sym">✎</span>ترسیم</button><button data-tool="circle"><span class="sym">◯</span>دایره</button><button data-tool="hole"><span class="sym">◎</span>سوراخ</button><button data-tool="face"><span class="sym">▱</span>روی وجه</button><span class="dockDivider"></span><button data-tool="move"><span class="sym">✥</span>حرکت</button><button data-tool="rotate"><span class="sym">⟳</span>چرخش</button><button data-tool="copy"><span class="sym">▣</span>کپی</button><button data-tool="delete"><span class="sym">⌫</span>حذف</button><button data-tool="more"><span class="sym">⋯</span>بیشتر</button></div>
+<div id="cadMore" aria-label="ابزارهای گروه‌بندی‌شده">
+<button data-tool="paramSketch">✎ Sketch حرفه‌ای</button>
+<button data-tool="box">▣ مکعب</button><button data-tool="cyl">◯ استوانه</button><button data-tool="sphere">● کره</button><button data-tool="cone">△ مخروط</button><button data-tool="hex">⬡ منشور شش‌ضلعی</button>
+<button data-tool="move">✥ جابه‌جایی</button><button data-tool="rotate">⟳ دوران</button><button data-tool="scale">⤢ مقیاس</button>
+<button data-tool="union">⊕ Union</button><button data-tool="subtract">⊖ Subtract</button><button data-tool="intersect">∩ Intersect</button>
+<button data-tool="fillet">◠ Fillet دوبعدی</button><button data-tool="chamfer">◇ Chamfer دوبعدی</button>
+<button data-tool="copy">⧉ کپی</button><button data-tool="delete">⌫ حذف</button>
+<button data-tool="stl">⇩ STL</button><button data-tool="step">⇩ STEP دقیق</button>
+<button data-tool="undo">↶ Undo</button><button data-tool="redo">↷ Redo</button>
+</div>
+<div id="cadDock" aria-label="ابزارهای سریع">
+<button data-tool="paramSketch" class="heroTool"><span class="sym">✎</span>Sketch</button>
+<button data-tool="primitives"><span class="sym">⬡</span>احجام</button>
+<button data-tool="transform"><span class="sym">✥</span>تبدیل</button>
+<button data-tool="booleanMenu"><span class="sym">⊕</span>Boolean</button>
+<button data-tool="history"><span class="sym">☷</span>تاریخچه</button>
+<button data-tool="exportMenu"><span class="sym">⇩</span>خروجی</button>
+<button data-tool="more"><span class="sym">⋯</span>همه</button>
+</div>
 
     <canvas id="sketchOverlay" aria-label="ترسیم مستقیم روی مدل"></canvas>
     <div id="draftHud"><span class="draftMessage" id="draftHelp">با انگشت روی صفحه بکشید</span>
@@ -662,7 +690,7 @@ function showStepSave(blob){
  stepDetails.textContent='دریافت کامل و بررسی اولیه موفق بود. حجم فایل: '+blob.size+' بایت. برای ذخیره، دکمه زیر را لمس کنید.';stepProgress(blob.size,blob.size,'دریافت کامل');
  stepPanel.style.display='flex';
 }
-// v2.4.0: smaller HTTP Range chunks and faster stalled-connection recovery.
+// v2.5.0: smaller HTTP Range chunks and faster stalled-connection recovery.
 // Each completed chunk is retained so a dropped Safari connection never restarts from zero.
 const STEP_CHUNK_SIZE=64*1024;
 const STEP_MAX_BYTES=200*1024*1024;
@@ -703,7 +731,7 @@ async function stepReadChunk(response,expected,signal){
  for(const part of parts){bytes.set(part,offset);offset+=part.length}
  return bytes;
 }
-// v2.4.0: one full GET first; preserve received bytes and resume only after interruption.
+// v2.5.0: one full GET first; preserve received bytes and resume only after interruption.
 async function stepDownloadFast(baseUrl,jobId,size,signal){
  if(!Number.isSafeInteger(size)||size<=0||size>STEP_MAX_BYTES)throw new Error('حجم STEP نامعتبر است');
  if(!/^[a-f0-9]{32}$/.test(jobId))throw new Error('شناسه STEP نامعتبر است');
@@ -768,7 +796,7 @@ async function stepDownloadFast(baseUrl,jobId,size,signal){
    signal.removeEventListener('abort',abort);
   }
  }
- console.info('[STEP v2.4.0] download ms',Math.round(performance.now()-started),'retries',retries,'bytes',received);
+ console.info('[STEP v2.5.0] download ms',Math.round(performance.now()-started),'retries',retries,'bytes',received);
  return new Blob(chunks,{type:'model/step'});
 }
 async function exportExactSTEP(){
@@ -788,7 +816,7 @@ async function exportExactSTEP(){
   stage='ساخت مدل';
   const payload={objects:items.map(makeExactNode)};
   const json=JSON.stringify(payload);
-  console.info('[STEP v2.4.0] request bytes',new Blob([json]).size,'objects',payload.objects.length);
+  console.info('[STEP v2.5.0] request bytes',new Blob([json]).size,'objects',payload.objects.length);
   showStepTransfer('مرحله ۱ از ۲: سرور در حال تولید فایل STEP است. لطفاً صفحه را باز نگه دارید.');
   stepProgress(0,0,'تولید هندسه روی سرور — درصد هنوز مشخص نیست');
   totalTimer=setTimeout(()=>controller.abort(),360000);
@@ -811,12 +839,12 @@ async function exportExactSTEP(){
   if(!head.includes('ISO-10303-21'))throw new Error('سرآیند STEP معتبر نیست');
   if(!tail.includes('END-ISO-10303-21;'))throw new Error('پایان فایل STEP ناقص است');
   stage='آماده برای ذخیره';
-  console.info('[STEP v2.4.0] complete',blob.size,'elapsed ms',Math.round(performance.now()-started));
+  console.info('[STEP v2.5.0] complete',blob.size,'elapsed ms',Math.round(performance.now()-started));
   showStepSave(blob);
   toast('STEP کامل دریافت شد؛ دکمه ذخیره را لمس کنید');
  }catch(e){
   const message='STEP ['+stage+']: '+(e?.name==='AbortError'?'عملیات لغو شد یا مهلت شش‌دقیقه‌ای پایان یافت':(e?.message||String(e)));
-  console.error('[STEP v2.4.0]',message,e);
+  console.error('[STEP v2.5.0]',message,e);
   toast(message);document.getElementById('stepSaveTitle').textContent='خطا در دریافت STEP';
   stepPanel.style.display='flex';stepDetails.textContent=message;
   document.getElementById('stepProgressLabel').textContent='عملیات ناموفق — پنل را ببندید و دوباره تلاش کنید.';
@@ -989,7 +1017,7 @@ function performBoolean(a,b,op,opts={}){
 }
 
 
-// v2.4.0: editable parametric feature tree. Rebuilds preview using the existing
+// v2.5.0: editable parametric feature tree. Rebuilds preview using the existing
 // three-bvh-csg kernel, while retaining a matching exact OCCT recipe for STEP.
 const featurePanel=document.getElementById('featurePanel');
 document.getElementById('featureBtn').onclick=()=>{featurePanel.classList.toggle('open');renderFeatures()};
@@ -1095,7 +1123,15 @@ function refreshCadDock(){
  });
 }
 function dockAction(a){
- if(a==='more'){cadMore.classList.toggle('open');return}
+ if(['more','primitives','transform','booleanMenu','edges','exportMenu'].includes(a)){
+  const groups={primitives:['box','cyl','sphere','cone','hex'],transform:['move','rotate','scale','copy','delete'],booleanMenu:['union','subtract','intersect'],edges:['fillet','chamfer'],exportMenu:['step','stl']};
+  const allowed=groups[a]||null;
+  cadMore.querySelectorAll('[data-tool]').forEach(b=>b.hidden=!!allowed&&!allowed.includes(b.dataset.tool));
+  cadMore.classList.toggle('open',a==='more'?!cadMore.classList.contains('open'):true);
+  return;
+ }
+ if(a==='paramSketch'){cadMore.classList.remove('open');document.getElementById('sketchBtn').click();return}
+ if(a==='history'){cadMore.classList.remove('open');document.getElementById('featureBtn').click();return}
  if(['union','subtract','intersect'].includes(a)){cadMore.classList.remove('open');beginBoolean(a);return}
  if(a==='select'){endDraft();gizmo.detach();gizmoMode=null;controls.enabled=true;refreshCadDock();return}
  if(a==='scale'){setGizmo('scale');refreshCadDock();return}
@@ -1119,7 +1155,7 @@ refreshCadDock();
 addObject('box',{x:60,y:40,z:20},'Base Plate');
 resize();
 </script>
-<div id="cadBuild" style="position:fixed;bottom:3px;right:7px;z-index:1;font:10px sans-serif;color:#81919e;pointer-events:none">NiliCAD v2.2 · آزمایشی</div>
+<div id="cadBuild" style="position:fixed;bottom:3px;right:7px;z-index:1;font:10px sans-serif;color:#81919e;pointer-events:none">NiliCAD v2.5.0 · آزمایشی</div>
 <div id="cadServerPanel" style="display:none;position:fixed;inset:0;z-index:99990;background:#0009;align-items:center;justify-content:center;direction:rtl">
  <div style="background:#1e293b;color:white;border:1px solid #64748b;border-radius:16px;padding:20px;width:min(440px,92vw);box-shadow:0 12px 45px #0009">
   <h3 style="margin:0 0 12px">انتخاب محل موتور Open CASCADE</h3>
