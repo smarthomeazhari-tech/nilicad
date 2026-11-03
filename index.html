@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>NiliCAD Web Preview v2.2.3</title>
+<title>NiliCAD Web Preview v2.2.4</title>
 <style>
 :root{color-scheme:dark;--bg:#111820;--panel:#1a2530;--panel2:#202e3b;--line:#344554;--text:#e8eef4;--muted:#9aabba;--accent:#55b7a7;--accent2:#397eae}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font-family:Tahoma,Arial,sans-serif;overflow:hidden}
@@ -124,7 +124,7 @@ window.addEventListener('unhandledrejection', function(e) {
 <div id="stepSavePanel" role="dialog" aria-modal="true" aria-label="ذخیره فایل STEP"><div id="stepSaveCard"><h3 id="stepSaveTitle">آماده‌سازی خروجی STEP</h3><p id="stepSaveDetails"></p><div id="stepProgressTrack" role="progressbar" aria-label="پیشرفت دریافت STEP" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div id="stepProgressFill"></div></div><div id="stepProgressLabel">آماده‌سازی…</div><button class="primary" id="stepSaveNow">ذخیره فایل STEP</button><button id="stepSaveClose">بستن</button><p class="note">در Safari، پس از لمس ذخیره، پوشه Downloads یا فهرست دانلودهای مرورگر را بررسی کنید.</p></div></div>
 <div id="startupError" hidden style="position:fixed;top:55px;left:10px;right:10px;z-index:99999;background:#8a2931;color:white;padding:12px;border-radius:10px;direction:rtl"></div><div class="app">
 <header>
-  <strong>NiliCAD</strong><span class="tag">WEB PREVIEW · v2.2.3 · Context Tools</span>
+  <strong>NiliCAD</strong><span class="tag">WEB PREVIEW · v2.2.4 · Context Tools</span>
   <div class="actions">
     <button id="panelsBtn">قطعات / ابعاد</button><button id="openBtn">بازکردن</button><input type="file" id="fileInput" accept=".json,application/json" hidden><button id="newBtn">پروژه جدید</button><button id="saveBtn">ذخیره</button>
   </div>
@@ -652,9 +652,9 @@ function showStepSave(blob){
  stepDetails.textContent='دریافت کامل و بررسی اولیه موفق بود. حجم فایل: '+blob.size+' بایت. برای ذخیره، دکمه زیر را لمس کنید.';stepProgress(blob.size,blob.size,'دریافت کامل');
  stepPanel.style.display='flex';
 }
-// v2.2.3: server-side prepare, then bounded HTTP Range chunks with retries.
+// v2.2.4: smaller HTTP Range chunks and faster stalled-connection recovery.
 // Each completed chunk is retained so a dropped Safari connection never restarts from zero.
-const STEP_CHUNK_SIZE=128*1024;
+const STEP_CHUNK_SIZE=64*1024;
 const STEP_MAX_BYTES=200*1024*1024;
 function stepHttpError(response,detail){return new Error('HTTP '+response.status+(detail?' — '+detail:''))}
 async function stepFetchWithTimeout(url,options,outerSignal,timeoutMs){
@@ -677,7 +677,7 @@ async function stepReadChunk(response,expected,signal){
   while(true){
    let timer;let abortListener;
    const stalled=new Promise((_,reject)=>{
-    timer=setTimeout(()=>{reader.cancel().catch(()=>{});reject(new Error('دریافت قطعه متوقف شد'))},35000);
+    timer=setTimeout(()=>{reader.cancel().catch(()=>{});reject(new Error('دریافت قطعه متوقف شد'))},15000);
     abortListener=()=>{reader.cancel().catch(()=>{});reject(new DOMException('Cancelled','AbortError'))};
     signal.addEventListener('abort',abortListener,{once:true});
    });
@@ -705,7 +705,7 @@ async function stepDownloadInRanges(baseUrl,jobId,size,signal){
    if(signal.aborted)throw new DOMException('Cancelled','AbortError');
    try{
     const response=await stepFetchWithTimeout(baseUrl+'/download-step/'+jobId,
-      {method:'GET',headers:{Range:'bytes='+start+'-'+end,'Cache-Control':'no-cache'},cache:'no-store'},signal,45000);
+      {method:'GET',headers:{Range:'bytes='+start+'-'+end,'Cache-Control':'no-cache'},cache:'no-store'},signal,20000);
     if(response.status!==206)throw stepHttpError(response,'سرور از دانلود محدوده‌ای پشتیبانی نکرد');
     const range=response.headers.get('content-range');
     const match=range&&/^bytes (\d+)-(\d+)\/(\d+)$/.exec(range.trim());
@@ -716,7 +716,7 @@ async function stepDownloadInRanges(baseUrl,jobId,size,signal){
    }catch(e){lastError=e;
     if(signal.aborted)throw e;
     stepDetails.textContent='ارتباط دریافت قطع شد؛ تلاش مجدد '+attempt+' از ۵ برای ادامه از بایت '+start+'…';
-    if(attempt<5)await new Promise(resolve=>setTimeout(resolve,Math.min(1000*attempt,4000)));
+    if(attempt<5)await new Promise(resolve=>setTimeout(resolve,Math.min(500*attempt,2000)));
    }
   }
   if(!part)throw new Error('دریافت از بایت '+start+' پس از ۵ تلاش ناموفق بود: '+(lastError?.message||lastError));
@@ -743,7 +743,7 @@ async function exportExactSTEP(){
   stage='ساخت مدل';
   const payload={objects:items.map(makeExactNode)};
   const json=JSON.stringify(payload);
-  console.info('[STEP v2.2.3] request bytes',new Blob([json]).size,'objects',payload.objects.length);
+  console.info('[STEP v2.2.4] request bytes',new Blob([json]).size,'objects',payload.objects.length);
   showStepTransfer('مرحله ۱ از ۲: سرور در حال تولید فایل STEP است. لطفاً صفحه را باز نگه دارید.');
   stepProgress(0,0,'تولید هندسه روی سرور — درصد هنوز مشخص نیست');
   totalTimer=setTimeout(()=>controller.abort(),360000);
@@ -766,12 +766,12 @@ async function exportExactSTEP(){
   if(!head.includes('ISO-10303-21'))throw new Error('سرآیند STEP معتبر نیست');
   if(!tail.includes('END-ISO-10303-21;'))throw new Error('پایان فایل STEP ناقص است');
   stage='آماده برای ذخیره';
-  console.info('[STEP v2.2.3] complete',blob.size,'elapsed ms',Math.round(performance.now()-started));
+  console.info('[STEP v2.2.4] complete',blob.size,'elapsed ms',Math.round(performance.now()-started));
   showStepSave(blob);
   toast('STEP کامل دریافت شد؛ دکمه ذخیره را لمس کنید');
  }catch(e){
   const message='STEP ['+stage+']: '+(e?.name==='AbortError'?'عملیات لغو شد یا مهلت شش‌دقیقه‌ای پایان یافت':(e?.message||String(e)));
-  console.error('[STEP v2.2.3]',message,e);
+  console.error('[STEP v2.2.4]',message,e);
   toast(message);document.getElementById('stepSaveTitle').textContent='خطا در دریافت STEP';
   stepPanel.style.display='flex';stepDetails.textContent=message;
   document.getElementById('stepProgressLabel').textContent='عملیات ناموفق — پنل را ببندید و دوباره تلاش کنید.';
