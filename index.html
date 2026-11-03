@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>NiliCAD Web Preview v2.6.0</title>
+<title>NiliCAD Web Preview v2.7.0</title>
 <style>
 :root{color-scheme:dark;--bg:#111820;--panel:#1a2530;--panel2:#202e3b;--line:#344554;--text:#e8eef4;--muted:#9aabba;--accent:#55b7a7;--accent2:#397eae}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font-family:Tahoma,Arial,sans-serif;overflow:hidden}
@@ -144,7 +144,7 @@ window.addEventListener('unhandledrejection', function(e) {
 <div id="stepSavePanel" role="dialog" aria-modal="true" aria-label="ذخیره فایل STEP"><div id="stepSaveCard"><h3 id="stepSaveTitle">آماده‌سازی خروجی STEP</h3><p id="stepSaveDetails"></p><div id="stepProgressTrack" role="progressbar" aria-label="پیشرفت دریافت STEP" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div id="stepProgressFill"></div></div><div id="stepProgressLabel">آماده‌سازی…</div><button class="primary" id="stepSaveNow">ذخیره فایل STEP</button><button id="stepSaveClose">بستن</button><p class="note">در Safari، پس از لمس ذخیره، پوشه Downloads یا فهرست دانلودهای مرورگر را بررسی کنید.</p></div></div>
 <div id="startupError" hidden style="position:fixed;top:55px;left:10px;right:10px;z-index:99999;background:#8a2931;color:white;padding:12px;border-radius:10px;direction:rtl"></div><div class="app">
 <header>
-  <strong>NiliCAD</strong><span class="tag">WEB PREVIEW · v2.6.0 · Context Tools</span>
+  <strong>NiliCAD</strong><span class="tag">WEB PREVIEW · v2.7.0 · Context Tools</span>
   <div class="actions">
     <button id="panelsBtn">قطعات / ابعاد</button><button id="openBtn">بازکردن</button><input type="file" id="fileInput" accept=".json,application/json" hidden><button id="newBtn">پروژه جدید</button><button id="saveBtn">ذخیره</button><button id="featureBtn">تاریخچه</button>
   </div>
@@ -212,8 +212,8 @@ window.addEventListener('unhandledrejection', function(e) {
     <div id="draftHud"><span class="draftMessage" id="draftHelp">با انگشت روی صفحه بکشید</span>
       <select id="faceOperation" style="display:none"><option value="add">افزودن حجم</option><option value="cut">حذف حجم</option></select><select id="draftShape"><option value="rect">مستطیل</option><option value="circle">دایره</option></select>
       <label class="draftMessage">عمق <input id="draftDepth" type="number" value="20" min="0.1" step="1"> mm</label>
-      <span class="draftMessage" id="draftSize">—</span>
-      <button id="draftConfirm" class="primary" disabled>تأیید</button><button id="draftCancel">خروج</button></div>
+      <span class="draftMessage" id="draftSize">—</span><label class="draftMessage" id="inlineWidthLabel">عرض <input id="inlineWidth" type="number" min="0.1" step="any" value="60"> mm</label><label class="draftMessage" id="inlineHeightLabel">طول <input id="inlineHeight" type="number" min="0.1" step="any" value="35"> mm</label>
+      <button id="draftPreset" type="button">نمونه ۶۰×۳۵×۲۰</button><button id="draftConfirm" class="primary" disabled>تأیید</button><button id="draftCancel">خروج</button></div>
     <div class="viewtools"><button id="topBtn">بالا</button><button id="frontBtn">روبرو</button><button id="isoBtn">ایزومتریک</button></div>
     <div class="hint">محیط آزمایشی تعاملی NiliCAD — واحد: میلی‌متر</div>
     <div class="toast" id="toast"></div>
@@ -473,13 +473,45 @@ new ResizeObserver(overlayResize).observe(canvas);
 function screenPt(e){const r=overlay.getBoundingClientRect();return {x:e.clientX-r.left,y:e.clientY-r.top}}
 function projectToPlane(e){const r=overlay.getBoundingClientRect();pointer.set((e.clientX-r.left)/r.width*2-1,-((e.clientY-r.top)/r.height*2-1));raycaster.setFromCamera(pointer,camera);if(draftMode==='hole')return raycaster.ray.intersectPlane(holePlane,new THREE.Vector3());if(draftMode==='face'&&facePlane)return raycaster.ray.intersectPlane(facePlane,new THREE.Vector3());workPlane.constant=-draftPlaneY;return raycaster.ray.intersectPlane(workPlane,new THREE.Vector3())}
 function worldToOverlay(v){const q=v.clone().project(camera),r=overlay.getBoundingClientRect();return{x:(q.x+1)*r.width/2,y:(1-q.y)*r.height/2}}
+// v2.7: editable on-canvas sketch dimensions, preserving the existing drag-to-extrude handle.
+let dimensionLock=false;
+function syncDraftDimensionInputs(){
+ const d=draftDims();if(!d||dimensionLock)return;
+ const a=document.activeElement;
+ if(a!==document.getElementById('inlineWidth'))document.getElementById('inlineWidth').value=d.x.toFixed(2);
+ if(a!==document.getElementById('inlineHeight'))document.getElementById('inlineHeight').value=d.y.toFixed(2);
+}
+function applyInlineDimensions(){
+ if(!draftA||!draftB||!['rect','circle'].includes(draftMode))return;
+ const w=Number(document.getElementById('inlineWidth').value),h=Number(document.getElementById('inlineHeight').value);
+ if(!Number.isFinite(w)||w<=0||w>10000||!Number.isFinite(h)||h<=0||h>10000){toast('ابعاد باید مثبت و معتبر باشند');return}
+ const sx=draftB.x>=draftA.x?1:-1,sz=draftB.z>=draftA.z?1:-1;
+ if(draftShape.value==='circle')draftB.set(draftA.x+w/2,draftPlaneY,draftA.z);
+ else draftB.set(draftA.x+sx*w,draftPlaneY,draftA.z+sz*h);
+ draftReady=true;pullStage=true;draftPaint();
+}
+for(const id of ['inlineWidth','inlineHeight']){
+ const el=document.getElementById(id);
+ el.addEventListener('focus',()=>{dimensionLock=true});
+ el.addEventListener('change',()=>{dimensionLock=false;applyInlineDimensions()});
+ el.addEventListener('blur',()=>{dimensionLock=false});
+ el.addEventListener('keydown',e=>{if(e.key==='Enter'){el.blur();e.preventDefault()}});
+}
+document.getElementById('draftPreset').onclick=()=>{
+ if(draftMode!=='rect')beginDraft('rect');
+ draftShape.value='rect';draftPlaneY=0;
+ draftA=new THREE.Vector3(-30,0,-17.5);draftB=new THREE.Vector3(30,0,17.5);
+ document.getElementById('inlineWidth').value='60';document.getElementById('inlineHeight').value='35';
+ document.getElementById('draftDepth').value='20';draftReady=true;pullStage=true;draftPaint();
+ toast('مستطیل ۶۰×۳۵ آماده است؛ دستگیره ارتفاع را بکشید یا تأیید کنید');
+};
 function draftDims(){if(!draftA||!draftB)return null;const dx=draftMode==='face'?Math.abs(draftB.clone().sub(draftA).dot(faceU)):Math.abs(draftB.x-draftA.x),dz=draftMode==='face'?Math.abs(draftB.clone().sub(draftA).dot(faceV)):Math.abs(draftB.z-draftA.z);if(draftMode==='hole'||draftShape.value==='circle'){const radius=(draftMode==='hole'||draftMode==='face')?draftA.distanceTo(draftB):Math.hypot(draftB.x-draftA.x,draftB.z-draftA.z);return radius>0.5?{x:radius*2,y:radius*2,radius}:null}return dx>0.5&&dz>0.5?{x:dx,y:dz}:null}
 function draftPaint(){updateLivePreview();if(!pen)return;const r=overlay.getBoundingClientRect();pen.clearRect(0,0,r.width,r.height);if(!draftMode)return;
  if(!draftA||!draftB)return;const a=worldToOverlay(draftA),b=worldToOverlay(draftB),d=draftDims();pen.lineWidth=2.5;pen.strokeStyle='#67f7d2';pen.fillStyle='#32cfac33';pen.setLineDash([7,4]);pen.beginPath();
  if(draftMode==='hole'||draftShape.value==='circle'){const rad=Math.hypot(b.x-a.x,b.y-a.y);pen.arc(a.x,a.y,rad,0,Math.PI*2)}else{const p1=worldToOverlay(draftMode==='face'?draftA.clone().addScaledVector(faceV,draftB.clone().sub(draftA).dot(faceV)):new THREE.Vector3(draftA.x,draftPlaneY,draftB.z)),p2=worldToOverlay(draftMode==='face'?draftA.clone().addScaledVector(faceU,draftB.clone().sub(draftA).dot(faceU)):new THREE.Vector3(draftB.x,draftPlaneY,draftA.z));pen.moveTo(a.x,a.y);pen.lineTo(p2.x,p2.y);pen.lineTo(b.x,b.y);pen.lineTo(p1.x,p1.y);pen.closePath()}
  pen.fill();pen.stroke();pen.setLineDash([]);
  document.querySelector('#draftSize').textContent=d?(draftMode==='hole'||draftShape.value==='circle'?`قطر ${d.x.toFixed(1)} mm`:`${d.x.toFixed(1)} × ${d.y.toFixed(1)} mm`):'اندازه را با کشیدن تعیین کنید';
- document.querySelector('#draftConfirm').disabled=!d;
+ document.querySelector('#draftConfirm').disabled=!d;syncDraftDimensionInputs();
  if(pullStage&&draftMode!=='hole'&&draftMode!=='face'&&d){const c=draftShape.value==='circle'?draftA:(draftMode==='face'?draftA.clone().add(draftB).multiplyScalar(.5):new THREE.Vector3((draftA.x+draftB.x)/2,draftPlaneY,(draftA.z+draftB.z)/2));const pt=worldToOverlay(c),depth=Number(document.querySelector('#draftDepth').value)||20;pen.setLineDash([]);pen.lineWidth=4;pen.strokeStyle='#ffd37a';pen.beginPath();pen.moveTo(pt.x,pt.y);pen.lineTo(pt.x,pt.y-65);pen.stroke();pen.fillStyle='#ffd37a';pen.beginPath();pen.arc(pt.x,pt.y-65,13,0,Math.PI*2);pen.fill();pen.fillStyle='#111820';pen.font='bold 15px sans-serif';pen.textAlign='center';pen.fillText('↕',pt.x,pt.y-60);document.querySelector('#draftSize').textContent+=` · ارتفاع ${depth.toFixed(1)} mm`;}
 
 }
@@ -493,7 +525,7 @@ function beginDraft(mode){stopMove();endDraft();draftMode=mode;draftShape.value=
   draftTarget=selected;
   document.querySelector('#draftHelp').textContent='روی هر سطح قابل انتخاب لمس و بکشید؛ سوراخ با تفریق هندسی ساخته می‌شود و می‌توانید چند بار تکرار کنید';
  }else{document.querySelector('#draftHelp').textContent='در نمای سه‌بعدی روی صفحه کاری بکشید؛ حجم نیمه‌شفاف را ببینید و دستگیره ارتفاع را تغییر دهید'}
- overlay.classList.add('active');hud.classList.add('active');controls.enabled=false;overlayResize();toast('ترسیم در نمای سه‌بعدی فعال شد')}
+ document.getElementById('inlineWidthLabel').hidden=mode==='hole'||mode==='face';document.getElementById('inlineHeightLabel').hidden=mode==='hole'||mode==='face';document.getElementById('draftPreset').hidden=mode==='hole'||mode==='face';overlay.classList.add('active');hud.classList.add('active');controls.enabled=false;overlayResize();toast('ترسیم در نمای سه‌بعدی فعال شد')}
 overlay.addEventListener('pointerdown',e=>{if(!draftMode||draftPointer!==null)return;
  if(draftReady&&draftDims()){
   const pt=screenPt(e);
@@ -713,7 +745,7 @@ function showStepSave(blob){
  stepDetails.textContent='دریافت کامل و بررسی اولیه موفق بود. حجم فایل: '+blob.size+' بایت. برای ذخیره، دکمه زیر را لمس کنید.';stepProgress(blob.size,blob.size,'دریافت کامل');
  stepPanel.style.display='flex';
 }
-// v2.6.0: smaller HTTP Range chunks and faster stalled-connection recovery.
+// v2.7.0: smaller HTTP Range chunks and faster stalled-connection recovery.
 // Each completed chunk is retained so a dropped Safari connection never restarts from zero.
 const STEP_CHUNK_SIZE=64*1024;
 const STEP_MAX_BYTES=200*1024*1024;
@@ -754,7 +786,7 @@ async function stepReadChunk(response,expected,signal){
  for(const part of parts){bytes.set(part,offset);offset+=part.length}
  return bytes;
 }
-// v2.6.0: one full GET first; preserve received bytes and resume only after interruption.
+// v2.7.0: one full GET first; preserve received bytes and resume only after interruption.
 async function stepDownloadFast(baseUrl,jobId,size,signal){
  if(!Number.isSafeInteger(size)||size<=0||size>STEP_MAX_BYTES)throw new Error('حجم STEP نامعتبر است');
  if(!/^[a-f0-9]{32}$/.test(jobId))throw new Error('شناسه STEP نامعتبر است');
@@ -819,7 +851,7 @@ async function stepDownloadFast(baseUrl,jobId,size,signal){
    signal.removeEventListener('abort',abort);
   }
  }
- console.info('[STEP v2.6.0] download ms',Math.round(performance.now()-started),'retries',retries,'bytes',received);
+ console.info('[STEP v2.7.0] download ms',Math.round(performance.now()-started),'retries',retries,'bytes',received);
  return new Blob(chunks,{type:'model/step'});
 }
 async function exportExactSTEP(){
@@ -839,7 +871,7 @@ async function exportExactSTEP(){
   stage='ساخت مدل';
   const payload={objects:items.map(makeExactNode)};
   const json=JSON.stringify(payload);
-  console.info('[STEP v2.6.0] request bytes',new Blob([json]).size,'objects',payload.objects.length);
+  console.info('[STEP v2.7.0] request bytes',new Blob([json]).size,'objects',payload.objects.length);
   showStepTransfer('مرحله ۱ از ۲: سرور در حال تولید فایل STEP است. لطفاً صفحه را باز نگه دارید.');
   stepProgress(0,0,'تولید هندسه روی سرور — درصد هنوز مشخص نیست');
   totalTimer=setTimeout(()=>controller.abort(),360000);
@@ -862,12 +894,12 @@ async function exportExactSTEP(){
   if(!head.includes('ISO-10303-21'))throw new Error('سرآیند STEP معتبر نیست');
   if(!tail.includes('END-ISO-10303-21;'))throw new Error('پایان فایل STEP ناقص است');
   stage='آماده برای ذخیره';
-  console.info('[STEP v2.6.0] complete',blob.size,'elapsed ms',Math.round(performance.now()-started));
+  console.info('[STEP v2.7.0] complete',blob.size,'elapsed ms',Math.round(performance.now()-started));
   showStepSave(blob);
   toast('STEP کامل دریافت شد؛ دکمه ذخیره را لمس کنید');
  }catch(e){
   const message='STEP ['+stage+']: '+(e?.name==='AbortError'?'عملیات لغو شد یا مهلت شش‌دقیقه‌ای پایان یافت':(e?.message||String(e)));
-  console.error('[STEP v2.6.0]',message,e);
+  console.error('[STEP v2.7.0]',message,e);
   toast(message);document.getElementById('stepSaveTitle').textContent='خطا در دریافت STEP';
   stepPanel.style.display='flex';stepDetails.textContent=message;
   document.getElementById('stepProgressLabel').textContent='عملیات ناموفق — پنل را ببندید و دوباره تلاش کنید.';
@@ -1040,7 +1072,7 @@ function performBoolean(a,b,op,opts={}){
 }
 
 
-// v2.6.0: editable parametric feature tree. Rebuilds preview using the existing
+// v2.7.0: editable parametric feature tree. Rebuilds preview using the existing
 // three-bvh-csg kernel, while retaining a matching exact OCCT recipe for STEP.
 const featurePanel=document.getElementById('featurePanel');
 document.getElementById('featureBtn').onclick=()=>{featurePanel.classList.toggle('open');renderFeatures()};
@@ -1231,7 +1263,7 @@ refreshCadDock();
 addObject('box',{x:60,y:40,z:20},'Base Plate');
 resize();
 </script>
-<div id="cadBuild" style="position:fixed;bottom:3px;right:7px;z-index:1;font:10px sans-serif;color:#81919e;pointer-events:none">NiliCAD v2.6.0 · آزمایشی</div>
+<div id="cadBuild" style="position:fixed;bottom:3px;right:7px;z-index:1;font:10px sans-serif;color:#81919e;pointer-events:none">NiliCAD v2.7.0 · آزمایشی</div>
 <div id="cadServerPanel" style="display:none;position:fixed;inset:0;z-index:99990;background:#0009;align-items:center;justify-content:center;direction:rtl">
  <div style="background:#1e293b;color:white;border:1px solid #64748b;border-radius:16px;padding:20px;width:min(440px,92vw);box-shadow:0 12px 45px #0009">
   <h3 style="margin:0 0 12px">انتخاب محل موتور Open CASCADE</h3>
