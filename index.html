@@ -573,8 +573,46 @@ document.getElementById('cadTestServer').onclick=async()=>{
   }finally{clearTimeout(timeout)}
  }catch(e){status.textContent='اتصال برقرار نشد: '+e.message+' (آدرس، HTTPS، CORS و فایروال را بررسی کنید)'}
 };
+// Read STEP incrementally, with a per-chunk inactivity timeout and useful diagnostics.
+async function readStepResponse(response, onProgress, inactivityMs=45000){
+ const expected=Number(response.headers.get('content-length'))||0;
+ const maxBytes=200*1024*1024;
+ if(expected>maxBytes)throw new Error('حجم فایل STEP بیش از حد مجاز است');
+ if(!response.body || !response.body.getReader){
+  const blob=await response.blob();
+  if(blob.size>maxBytes)throw new Error('حجم فایل STEP بیش از حد مجاز است');
+  onProgress(blob.size,expected);
+  return blob;
+ }
+ const reader=response.body.getReader();
+ const chunks=[];let total=0;
+ try{
+  while(true){
+   let timer;
+   const timeout=new Promise((_,reject)=>{
+    timer=setTimeout(()=>reject(new Error('تا '+Math.round(inactivityMs/1000)+' ثانیه داده جدیدی از سرور دریافت نشد')),inactivityMs);
+   });
+   let result;
+   try{result=await Promise.race([reader.read(),timeout]);}
+   finally{clearTimeout(timer)}
+   if(result.done)break;
+   if(result.value && result.value.byteLength){
+    chunks.push(result.value);
+    total+=result.value.byteLength;
+    if(total>maxBytes)throw new Error('حجم فایل STEP بیش از حد مجاز است');
+    onProgress(total,expected);
+   }
+  }
+ }catch(err){try{await reader.cancel()}catch(_){}throw err}
+ if(expected && total!==expected)throw new Error('انتقال ناقص STEP: '+total+' از '+expected+' بایت');
+ return new Blob(chunks,{type:'application/step'});
+}
 async function exportExactSTEP(){
  let stage='آماده‌سازی';
+ const button=document.querySelector('#stepBtn');
+ if(button.disabled)return;
+ button.disabled=true;
+ const started=performance.now();
  try{
   if(!items.length){toast('ابتدا یک قطعه بسازید');return}
   const url=cadSelectedUrl();
@@ -585,25 +623,38 @@ async function exportExactSTEP(){
   const json=JSON.stringify(payload);
   console.info('[STEP diagnostic] request bytes',new Blob([json]).size,'objects',payload.objects.length);
   stage='ارسال درخواست';toast('STEP: در حال ارسال درخواست...');
-  const response=await fetch(url+'/export-step',{method:'POST',headers:{'Content-Type':'application/json'},body:json});
+  const controller=new AbortController();
+  let response;
+  const requestTimer=setTimeout(()=>controller.abort(),180000);
+  try{
+   response=await fetch(url+'/export-step',{method:'POST',headers:{'Content-Type':'application/json'},body:json,signal:controller.signal});
+  }finally{clearTimeout(requestTimer)}
   console.info('[STEP diagnostic] HTTP',response.status,'content-type',response.headers.get('content-type'),'content-length',response.headers.get('content-length'));
   stage='بررسی پاسخ';
   if(!response.ok){const err=await response.text();throw new Error('HTTP '+response.status+': '+err.slice(0,180))}
-  stage='خواندن فایل';toast('STEP: پاسخ سرور دریافت شد؛ در حال خواندن فایل...');
-  const blob=await response.blob();
-  console.info('[STEP diagnostic] blob bytes',blob.size);
+  stage='خواندن فایل';
+  let lastUpdate=0;
+  const blob=await readStepResponse(response,(received,expected)=>{
+   const now=performance.now();
+   if(now-lastUpdate>900){
+    lastUpdate=now;
+    const progress=expected?' / '+expected+' بایت ('+Math.floor(received/expected*100)+'٪)':' بایت';
+    toast('STEP: دریافت '+received+progress);
+   }
+  });
+  console.info('[STEP diagnostic] blob bytes',blob.size,'elapsed ms',Math.round(performance.now()-started));
   if(!blob.size)throw new Error('پاسخ سرور خالی است');
-  const head=await blob.slice(0,160).text();
+  const head=await blob.slice(0,512).text();
   if(!head.includes('ISO-10303-21'))throw new Error('پاسخ STEP معتبر نیست: '+head.slice(0,90));
   stage='ذخیره در آیپد';toast('STEP: فایل '+blob.size+' بایت دریافت شد؛ در حال ذخیره...');
   await saveExactStepOnIOS(blob,'NiliCAD-precise.step');
   toast('STEP: دریافت موفق ('+blob.size+' بایت)');
  }catch(e){
-  const message='STEP ['+stage+']: '+(e&&e.message?e.message:String(e));
+  const message='STEP ['+stage+']: '+(e?.name==='AbortError'?'مهلت دریافت پاسخ سرور پایان یافت':(e&&e.message?e.message:String(e)));
   console.error('[STEP diagnostic]',message,e);
   toast(message);
   alert(message+'\nلطفاً از این پیام عکس بگیرید.');
- }
+ }finally{button.disabled=false}
 }
 document.querySelector('#exactStepBtn').onclick=exportExactSTEP;
 
@@ -663,22 +714,12 @@ function exportFacetedSTEP(){
 document.querySelector('#stepBtn').onclick=exportExactSTEP;
 
 async function saveExactStepOnIOS(blob,name){
- const file=new File([blob],name,{type:'application/octet-stream'});
- // On iPad, the native share sheet can save directly to Files.
- if(navigator.share && navigator.canShare && navigator.canShare({files:[file]})){
-  try { await navigator.share({files:[file],title:name}); return; }
-  catch(err){
-   if(err && err.name==='AbortError')throw new Error('ذخیره فایل لغو شد');
-   console.warn('Native STEP share failed; trying browser download',err);
-  }
- }
+ // Browser download is more reliable than navigator.share() after a long async request on iPadOS.
  const url=URL.createObjectURL(blob);
  const a=document.createElement('a');
  a.href=url;a.download=name;a.style.display='none';
  document.body.appendChild(a);
- a.click();
- a.remove();
- setTimeout(()=>URL.revokeObjectURL(url),120000);
+ try{a.click()}finally{a.remove();setTimeout(()=>URL.revokeObjectURL(url),120000)}
 }
 function download(blob,name){const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),30000)}
 let directPaletteReady=false;
