@@ -1369,7 +1369,7 @@ document.getElementById('modelToolsLaunch').onclick=()=>document.getElementById(
 document.querySelectorAll('#modelToolsTray [data-legacy]').forEach(b=>b.onclick=()=>{document.getElementById('modelToolsTray').classList.remove('open');document.getElementById(b.dataset.legacy)?.click()});
 document.getElementById('showLegacyPanels').onclick=()=>{const left=document.querySelector('.panel.left'),right=document.querySelector('.panel.right');const showing=left.style.getPropertyValue('display')==='block';for(const p of [left,right])p.style.setProperty('display',showing?'none':'block','important');if(!showing){left.style.cssText+=';position:absolute;top:0;left:0;bottom:0;width:245px;z-index:24';right.style.cssText+=';position:absolute;top:0;right:0;bottom:0;width:245px;z-index:24'}document.getElementById('modelToolsTray').classList.remove('open')};
 // Launch straight into the sketch editor on a new empty project.
-requestAnimationFrame(()=>skOpen());
+// The visible workspace initializes once at the end of the module.
 
 // v3: sketch entities are drawn in the actual perspective WebGL viewport, not a separate 2D canvas.
 const nc={mode:'sketch',tool:'line',points:[],arc:[],rectStart:null,circleStart:null,group:new THREE.Group(),surface:null,profile:null,preview:null,drag:null};
@@ -1595,6 +1595,7 @@ document.getElementById('fileInput').onchange=async e=>{const file=e.target.file
 // v3.6 file operations and contextual boolean tools
 const ncById=id=>document.getElementById(id);
 for(const [button,group] of [['ncFiles','ncFilesGroup'],['ncBool','ncBoolGroup']])ncById(button).onclick=()=>ncById(group).classList.toggle('open');
+ncById('ncEngine').onclick=()=>cadServerPanel(true);
 ncById('ncSave').onclick=()=>ncById('saveBtn').click();
 ncById('ncOpen').onclick=()=>ncById('openBtn').click();
 ncById('ncExportSTL').onclick=()=>ncById('stlBtn').click();
@@ -1739,7 +1740,7 @@ canvas.addEventListener('pointerup',e=>{if((nc.mode==='sketch'||nc.mode==='selec
 controls.addEventListener('change',()=>{if(nc.mode==='pull')ncPositionPull()});
 // Disable legacy full-screen sketch dialog; start on the perspective workplane.
 skOpen=function(){ncSketchReset();nc.mode='sketch';ncSetTool('line')};
-requestAnimationFrame(()=>{skW.classList.remove('open');ncSketchReset();ncSetTool('line')});
+skW.classList.remove('open');ncSketchReset();ncSetTool('line');
 
 </script>
 <input type="file" id="ncCADFile" accept=".step,.stp,.iges,.igs" hidden><input type="file" id="ncMeshFile" accept=".stl,.obj,.3mf" hidden><div id="ncTop"><button class="ncBtn" id="ncHome">⌂</button><span class="ncTitle">NiliCAD v4.2.0 · <span id="ncProject">Untitled Project</span></span><button class="ncBtn" id="ncMenu">•••</button></div>
@@ -1758,7 +1759,7 @@ requestAnimationFrame(()=>{skW.classList.remove('open');ncSketchReset();ncSetToo
 <button class="ncBtn" id="ncClear"><span class="ncIcon">⌫</span>Clear Sketch</button>
 </div>
 
-<div class="ncSeparator"></div><button class="ncBtn" id="ncFiles">▣ فایل / ورود و خروج</button><div class="ncGroup" id="ncFilesGroup"><button class="ncBtn" id="ncSave">ذخیره پروژه JSON</button><button class="ncBtn" id="ncOpen">بازکردن پروژه JSON</button><button class="ncBtn" id="ncImportMesh">ورود STL / OBJ / 3MF</button><button class="ncBtn" id="ncExportSTL">خروجی STL</button><button class="ncBtn" id="ncExportOBJ">خروجی OBJ</button><button class="ncBtn" id="ncExport3MF">خروجی 3MF</button><button class="ncBtn" id="ncExportSTEP">خروجی STEP (OCCT)</button><button class="ncBtn" id="ncImportCAD">ورود STEP / IGES</button><button class="ncBtn" id="ncExportIGES">خروجی IGES</button></div><button class="ncBtn" id="ncBool">⊕ عملیات احجام</button><div class="ncGroup" id="ncBoolGroup"><button class="ncBtn" id="ncUnion">⊕ اتصال Union</button><button class="ncBtn" id="ncSubtract">⊖ تفریق Subtract</button><button class="ncBtn" id="ncIntersect">∩ اشتراک Intersect</button><button class="ncBtn" id="ncDelete">⌫ حذف قطعه انتخابی</button></div><button class="ncBtn" id="ncConstruct" disabled><span class="ncIcon">⬡</span>Construct · مرحله بعد</button><button class="ncBtn" id="ncTransform" disabled><span class="ncIcon">✥</span>Transform · مرحله بعد</button><button class="ncBtn" id="ncTools" disabled><span class="ncIcon">⚒</span>Tools · مرحله بعد</button></div>
+<div class="ncSeparator"></div><button class="ncBtn" id="ncFiles">▣ فایل / ورود و خروج</button><div class="ncGroup" id="ncFilesGroup"><button class="ncBtn" id="ncEngine">تنظیم موتور CAD</button><button class="ncBtn" id="ncSave">ذخیره پروژه JSON</button><button class="ncBtn" id="ncOpen">بازکردن پروژه JSON</button><button class="ncBtn" id="ncImportMesh">ورود STL / OBJ / 3MF</button><button class="ncBtn" id="ncExportSTL">خروجی STL</button><button class="ncBtn" id="ncExportOBJ">خروجی OBJ</button><button class="ncBtn" id="ncExport3MF">خروجی 3MF</button><button class="ncBtn" id="ncExportSTEP">خروجی STEP (OCCT)</button><button class="ncBtn" id="ncImportCAD">ورود STEP / IGES</button><button class="ncBtn" id="ncExportIGES">خروجی IGES</button></div><button class="ncBtn" id="ncBool">⊕ عملیات احجام</button><div class="ncGroup" id="ncBoolGroup"><button class="ncBtn" id="ncUnion">⊕ اتصال Union</button><button class="ncBtn" id="ncSubtract">⊖ تفریق Subtract</button><button class="ncBtn" id="ncIntersect">∩ اشتراک Intersect</button><button class="ncBtn" id="ncDelete">⌫ حذف قطعه انتخابی</button></div><button class="ncBtn" id="ncConstruct" disabled><span class="ncIcon">⬡</span>Construct · مرحله بعد</button><button class="ncBtn" id="ncTransform" disabled><span class="ncIcon">✥</span>Transform · مرحله بعد</button><button class="ncBtn" id="ncTools" disabled><span class="ncIcon">⚒</span>Tools · مرحله بعد</button></div>
 <div id="ncRight"><button class="ncBtn" id="ncTopView" title="نمای بالا">▱ <span>Top</span></button><button class="ncBtn" id="ncIsoView" title="نمای ایزومتریک">⬡ <span>3D</span></button><button class="ncBtn" id="ncGrid" title="نمایش شبکه">▦ <span>Grid</span></button><button class="ncBtn" id="ncConstraints" disabled title="قیود هندسی در مرحله بعد">⌁ <span>Constraints</span></button></div>
 <div id="ncBottom"><span class="ncSmall" id="ncStatus">Sketch · صفحه XZ · واحد mm</span><button class="ncBtn" id="ncSplit">تقسیم نواحی</button><button class="ncBtn" id="ncExtrude" disabled>↥ Extrude</button><button class="ncBtn" id="ncConfirm" style="display:none">✓ ایجاد حجم</button></div>
 <div id="ncPull"><div class="handle">↑</div><input id="ncDepth" type="number" value="0" step="0.5" aria-label="Extrude depth in millimeters"><span class="ncSmall">mm</span></div><div id="ncMeasure"></div><div id="ncToast"></div>

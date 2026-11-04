@@ -1,0 +1,41 @@
+name: CAD browser integration
+on: [push, pull_request]
+jobs:
+  browsers:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: nilicad
+      - uses: actions/checkout@v4
+        with:
+          repository: smarthomeazhari-tech/nilicad-occt-server
+          ref: c63a8c8fe382d90e5482dc1108ead4d8cf97da1f
+          path: nilicad-occt-server
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: nilicad/package-lock.json
+      - run: pip install -r nilicad-occt-server/requirements-dev.txt
+      - run: python -m unittest discover -s tests -v
+        working-directory: nilicad-occt-server
+      - run: npm ci && npx playwright install --with-deps chromium webkit
+        working-directory: nilicad
+      - name: Start OCCT and run Chromium/WebKit scenarios
+        run: |
+          (cd nilicad-occt-server && python -m uvicorn server:app --host 127.0.0.1 --port 8765 > /tmp/occt.log 2>&1) &
+          for attempt in $(seq 1 60); do
+            if curl --fail --silent http://127.0.0.1:8765/health; then break; fi
+            sleep 1
+          done
+          cd nilicad
+          npm test
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: browser-screenshots
+          path: nilicad/test-results/
