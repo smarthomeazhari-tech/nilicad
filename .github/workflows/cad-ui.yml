@@ -10,7 +10,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: smarthomeazhari-tech/nilicad-occt-server
-          ref: c63a8c8
+          ref: c63a8c8fe382d90e5482dc1108ead4d8cf97da1f
           path: nilicad-occt-server
       - uses: actions/setup-python@v5
         with:
