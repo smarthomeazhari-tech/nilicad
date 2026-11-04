@@ -4,7 +4,7 @@ const {chromium,webkit}=require('playwright');
 const fs=require('node:fs');
 const path=require('node:path');
 const http=require('node:http');
-for(const [name,engine] of Object.entries({chromium,webkit}))test(name+' selection and extrusion interaction',async()=>{
+for(const [name,engine] of Object.entries({chromium,webkit}))test(name+' CAD geometry, interaction and file round trips',async()=>{
  const root=path.resolve(__dirname,'..');
  const server=http.createServer((req,res)=>{
   let file=req.url==='/'?'index.html':req.url.slice(1);
@@ -25,6 +25,8 @@ for(const [name,engine] of Object.entries({chromium,webkit}))test(name+' selecti
  await page.waitForFunction(()=>testEval('items.length')===1);
  assert.equal(await page.evaluate(()=>testEval('items.length')),1);
  assert.equal(await page.evaluate(()=>testEval('items[0].dims.z')),12);
+ await page.evaluate(()=>testEval(`document.getElementById('undoBtn').click()`));assert.equal(await page.evaluate(()=>testEval('items.length')),0);assert.equal(await page.evaluate(()=>testEval('ncRegions.length')),1);
+ await page.evaluate(()=>testEval(`document.getElementById('redoBtn').click()`));assert.equal(await page.evaluate(()=>testEval('items.length')),1);
  // Exact overlapping regions: no positive-volume overlap between independent extrusions.
  await page.evaluate(()=>testEval(`items.forEach(o=>world.remove(o.mesh));items=[];ncClearRegions();nc.mode='select';
  window.fixtureRect=function(x,y,w,h){skPoints=[{x,y},{x:x+w,y},{x:x+w,y:y+h},{x,y:y+h}];skSegments=skPoints.map((a,i)=>({kind:'line',a,b:skPoints[(i+1)%4]}));skClosed=true;ncDraw();ncSaveRegion();skClosed=false;skSegments=[];skPoints=[];ncClearVisual()}
@@ -50,17 +52,25 @@ for(const [name,engine] of Object.entries({chromium,webkit}))test(name+' selecti
   assert.ok(Math.abs(actual-want)<1e-6);
  }
  // Project download and open preserve exact recipes and both raw/exact sketch regions.
- await page.evaluate(()=>testEval(`fixtureRect(30,30,10,10);`));
+ // A server error must leave both operands and their recipes untouched.
+ await page.evaluate(()=>testEval(`addObject('box',{x:10,y:10,z:10},'Failure operand');`));
+ const operands=await page.evaluate(()=>testEval('JSON.stringify(state())'));
+ await page.route('**/evaluate',route=>route.fulfill({status:503,contentType:'application/json',body:JSON.stringify({detail:'Regression: unavailable kernel'})}));
+ await page.evaluate(()=>testEval(`performBoolean(items[0],items[1],'union')`));
+ assert.equal(await page.evaluate(()=>testEval('JSON.stringify(state())')),operands);await page.unroute('**/evaluate');
+ await page.evaluate(()=>testEval(`const extra=items.pop();world.remove(extra.mesh);fixtureRect(30,30,10,10);`));
+ await page.locator('#ncSplit').click();await page.waitForFunction(()=>testEval('ncRegions.length===1&&ncRegions[0].brep'));
+ await page.evaluate(()=>testEval(`fixtureRect(50,50,10,10);`));
  await page.locator('#ncFiles').click();
  const savedEvent=page.waitForEvent('download');await page.locator('#ncSave').click();const saved=await savedEvent;const projectPath=await saved.path();const project=JSON.parse(fs.readFileSync(projectPath,'utf8'));
- assert.equal(project.version,'5.0');assert.equal(project.sketchRegions.length,1);assert.ok(project.objects[0].exactRecipe);
+ assert.equal(project.version,'5.0');assert.equal(project.sketchRegions.length,2);assert.ok(project.objects[0].exactRecipe);
  await page.evaluate(()=>testEval(`ncClearRegions();items.forEach(o=>world.remove(o.mesh));items=[];`));
- await page.locator('#fileInput').setInputFiles(projectPath);await page.waitForFunction(()=>testEval('items.length===1&&ncRegions.length===1'));
+ await page.locator('#fileInput').setInputFiles(projectPath);await page.waitForFunction(()=>testEval('items.length===1&&ncRegions.length===2'));
  const before=await page.evaluate(()=>testEval('JSON.stringify(ncProjectData())'));
  await page.locator('#fileInput').setInputFiles({name:'broken.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify({...project,objects:[{...project.objects[0],position:[null,0,0]}]}))});
  assert.equal(await page.evaluate(()=>testEval('JSON.stringify(ncProjectData())')),before);
  // Sketches participate in undo/redo along with solids.
- await page.evaluate(()=>testEval(`snapshot();ncClearRegions();`));await page.evaluate(()=>testEval(`document.getElementById('undoBtn').click()`));assert.equal(await page.evaluate(()=>testEval('ncRegions.length')),1);
+ await page.evaluate(()=>testEval(`snapshot();ncClearRegions();`));await page.evaluate(()=>testEval(`document.getElementById('undoBtn').click()`));assert.equal(await page.evaluate(()=>testEval('ncRegions.length')),2);
  await page.evaluate(()=>testEval(`document.getElementById('redoBtn').click()`));assert.equal(await page.evaluate(()=>testEval('ncRegions.length')),0);
  // Real browser CAD downloads and imports preserve exact volume.
  for(const [button,extension] of [['ncExportSTEP','step'],['ncExportIGES','iges']]){
@@ -76,6 +86,7 @@ for(const [name,engine] of Object.entries({chromium,webkit}))test(name+' selecti
   const dims=await page.evaluate(()=>testEval('items.at(-1).dims'));assert.ok(Math.abs(dims.x-5)<.01);assert.ok(Math.abs(dims.y-10)<.01);assert.ok(Math.abs(dims.z-10)<.01);
   await page.evaluate(()=>testEval(`const last=items.pop();world.remove(last.mesh);`));
  }
+ fs.mkdirSync(path.join(root,'test-results'),{recursive:true});await page.screenshot({path:path.join(root,'test-results',name+'.png')});
  assert.deepEqual(errors,[]);
  }finally{await browser?.close();server.closeAllConnections();await new Promise(r=>server.close(r))}
 });

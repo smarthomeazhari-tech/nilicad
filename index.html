@@ -1739,7 +1739,7 @@ canvas.addEventListener('pointerup',e=>{if((nc.mode==='sketch'||nc.mode==='selec
 controls.addEventListener('change',()=>{if(nc.mode==='pull')ncPositionPull()});
 // Disable legacy full-screen sketch dialog; start on the perspective workplane.
 skOpen=function(){ncSketchReset();nc.mode='sketch';ncSetTool('line')};
-requestAnimationFrame(()=>{skW.classList.remove('open');ncSketchReset();ncSetTool('line')});
+skW.classList.remove('open');ncSketchReset();ncSetTool('line');
 
 </script>
 <input type="file" id="ncCADFile" accept=".step,.stp,.iges,.igs" hidden><input type="file" id="ncMeshFile" accept=".stl,.obj,.3mf" hidden><div id="ncTop"><button class="ncBtn" id="ncHome">⌂</button><span class="ncTitle">NiliCAD v4.2.0 · <span id="ncProject">Untitled Project</span></span><button class="ncBtn" id="ncMenu">•••</button></div>
