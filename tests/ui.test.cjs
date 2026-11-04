@@ -21,8 +21,33 @@ for(const [name,engine] of Object.entries({chromium,webkit}))test(name+' selecti
  await page.locator('#ncExtrude').click();await page.locator('#ncPull').waitFor({state:'visible'});
  const box=await page.locator('#ncPull').boundingBox();assert.ok(box.x>=0&&box.y>=0&&box.x+box.width<1100&&box.y+box.height<800);
  await page.locator('#ncDepth').fill('12');await page.locator('#ncDepth').dispatchEvent('change');await page.locator('#ncConfirm').click();
+ await page.waitForFunction(()=>testEval('items.length')===1);
  assert.equal(await page.evaluate(()=>testEval('items.length')),1);
  assert.equal(await page.evaluate(()=>testEval('items[0].dims.z')),12);
+ // Exact overlapping regions: no positive-volume overlap between independent extrusions.
+ await page.evaluate(()=>testEval(`items.forEach(o=>world.remove(o.mesh));items=[];ncClearRegions();nc.mode='select';
+ window.fixtureRect=function(x,y,w,h){skPoints=[{x,y},{x:x+w,y},{x:x+w,y:y+h},{x,y:y+h}];skSegments=skPoints.map((a,i)=>({kind:'line',a,b:skPoints[(i+1)%4]}));skClosed=true;ncDraw();ncSaveRegion();skClosed=false;skSegments=[];skPoints=[];ncClearVisual()}
+ fixtureRect(-20,-10,20,20);fixtureRect(-10,-10,20,20);`));
+ await page.locator('#ncSplit').click();await page.waitForFunction(()=>testEval('ncRegions.length===3&&ncRegions.every(r=>r.brep)'));
+ const points=await page.evaluate(()=>testEval(`ncRegions.map(r=>{const g=r.mesh.geometry,p=g.attributes.position,idx=g.index;const v=new THREE.Vector3();for(let k=0;k<3;k++)v.add(new THREE.Vector3().fromBufferAttribute(p,idx.getX(k)));v.multiplyScalar(1/3);v.y=.035;v.project(camera);const rect=canvas.getBoundingClientRect();return {x:rect.left+(v.x+1)*rect.width/2,y:rect.top+(1-v.y)*rect.height/2}})`));
+ for(const p of points.slice(0,2))await page.mouse.click(p.x,p.y);
+ assert.equal(await page.evaluate(()=>testEval('ncSelectedRegions.size')),2);
+ await page.locator('#ncExtrude').click();await page.locator('#ncPull').waitFor({state:'visible'});await page.locator('#ncDepth').fill('-5');await page.locator('#ncDepth').dispatchEvent('change');await page.locator('#ncConfirm').click();
+ await page.waitForFunction(()=>testEval('items.length===2&&!ncBusy'));
+ const volumes=await page.evaluate(()=>testEval(`Promise.all(items.map(async o=>(await (await ncRequest('/evaluate',makeExactNode(o))).json()).volume))`));
+ volumes.forEach(v=>assert.ok(Math.abs(v-1000)<1e-6));
+ // Hole selection is based on exact faces; the inner disk remains independently selectable.
+ await page.evaluate(()=>testEval(`items.forEach(o=>world.remove(o.mesh));items=[];ncClearRegions();nc.mode='select';fixtureRect(-20,-20,40,40);skCircle={center:{x:0,y:0},r:5};skClosed=false;ncDraw();ncSaveRegion();skCircle=null;ncClearVisual();`));
+ await page.locator('#ncSplit').click();await page.waitForFunction(()=>testEval('ncRegions.length===2&&ncRegions.every(r=>r.brep)'));
+ await page.evaluate(()=>testEval(`ncSelectRegion(ncRegions.reduce((a,b)=>a.area>b.area?a:b));`));
+ await page.locator('#ncExtrude').click();await page.locator('#ncPull').waitFor({state:'visible'});await page.locator('#ncDepth').fill('3');await page.locator('#ncConfirm').click();await page.waitForFunction(()=>testEval('items.length===1&&!ncBusy'));
+ const volume=await page.evaluate(()=>testEval(`(async()=>{return (await (await ncRequest('/evaluate',makeExactNode(items[0]))).json()).volume})()`));
+ assert.ok(Math.abs(volume-(1600-Math.PI*25)*3)<1e-5);
+ // Exact viewport Boolean path, not just the server kernel.
+ for(const [op,want] of [['union',1500],['subtract',500],['intersect',500]]){
+  const actual=await page.evaluate(op=>testEval(`(async()=>{items.forEach(o=>world.remove(o.mesh));items=[];ncClearRegions();addObject('box',{x:10,y:10,z:10},'A');addObject('box',{x:10,y:10,z:10},'B');items[0].mesh.position.set(0,0,0);items[1].mesh.position.set(5,0,0);await performBoolean(items[0],items[1],${JSON.stringify(op)});return (await (await ncRequest('/evaluate',makeExactNode(items[0]))).json()).volume})()`),op);
+  assert.ok(Math.abs(actual-want)<1e-6);
+ }
  assert.deepEqual(errors,[]);
  }finally{await browser?.close();server.closeAllConnections();await new Promise(r=>server.close(r))}
 });
