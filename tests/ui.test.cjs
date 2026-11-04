@@ -8,7 +8,7 @@ for(const [name,engine] of Object.entries({chromium,webkit}))test(name+' selecti
  const root=path.resolve(__dirname,'..');
  const server=http.createServer((req,res)=>{
   let file=req.url==='/'?'index.html':req.url.slice(1);
-  try{let data=fs.readFileSync(path.join(root,file));if(file==='index.html')data=Buffer.from(data.toString().replace('https://cdn.jsdelivr.net/npm/three@0.164.1/build/three.module.js','/node_modules/three/build/three.module.js').replace('https://cdn.jsdelivr.net/npm/three@0.164.1/examples/jsm/','/node_modules/three/examples/jsm/').replace('\n</script>\n<input type="file" id="ncMeshFile"','\nwindow.testEval=code=>eval(code);\n</script>\n<input type="file" id="ncMeshFile"'));res.setHeader('Content-Type',file.endsWith('.js')?'application/javascript':'text/html');res.end(data)}catch{res.writeHead(404);res.end()}
+  try{let data=fs.readFileSync(path.join(root,file));if(file==='index.html')data=Buffer.from(data.toString().replace('https://cdn.jsdelivr.net/npm/three@0.164.1/build/three.module.js','/node_modules/three/build/three.module.js').replace('https://cdn.jsdelivr.net/npm/three@0.164.1/examples/jsm/','/node_modules/three/examples/jsm/').replace('\n</script>\n<input type="file" id="ncCADFile"','\nwindow.testEval=code=>eval(code);\n</script>\n<input type="file" id="ncCADFile"'));res.setHeader('Content-Type',file.endsWith('.js')?'application/javascript':'text/html');res.end(data)}catch{res.writeHead(404);res.end()}
  });await new Promise(r=>server.listen(0,'127.0.0.1',r));
  let browser;try{
  browser=await engine.launch({headless:true,args:name==='chromium'?['--no-sandbox']:[]});const page=await browser.newPage({viewport:{width:1100,height:800},hasTouch:true});
@@ -16,7 +16,8 @@ for(const [name,engine] of Object.entries({chromium,webkit}))test(name+' selecti
  await page.goto('http://127.0.0.1:'+server.address().port);await page.waitForFunction(()=>typeof window.testEval==='function',{},{timeout:10000});await page.waitForTimeout(100);
  await page.evaluate(()=>testEval(`skPoints=[{x:-20,y:-20},{x:20,y:-20},{x:20,y:20},{x:-20,y:20}];skSegments=skPoints.map((a,i)=>({kind:'line',a,b:skPoints[(i+1)%4]}));skClosed=true;ncDraw();ncSaveRegion();skClosed=false;skSegments=[];skPoints=[];ncClearVisual();nc.mode='select';`));
  const screen=await page.evaluate(()=>testEval(`(()=>{const p=new THREE.Vector3(0,0,0).project(camera),r=canvas.getBoundingClientRect();return {x:r.left+(p.x+1)*r.width/2,y:r.top+(1-p.y)*r.height/2}})()`));
- await page.mouse.click(screen.x,screen.y);
+ await page.touchscreen.tap(screen.x,screen.y);
+ assert.equal(await page.evaluate(()=>testEval('ncSelectedRegions.size')),1);
  assert.equal(await page.locator('#ncExtrude').isEnabled(),true);
  await page.locator('#ncExtrude').click();await page.locator('#ncPull').waitFor({state:'visible'});
  const box=await page.locator('#ncPull').boundingBox();assert.ok(box.x>=0&&box.y>=0&&box.x+box.width<1100&&box.y+box.height<800);
@@ -47,6 +48,33 @@ for(const [name,engine] of Object.entries({chromium,webkit}))test(name+' selecti
  for(const [op,want] of [['union',1500],['subtract',500],['intersect',500]]){
   const actual=await page.evaluate(op=>testEval(`(async()=>{items.forEach(o=>world.remove(o.mesh));items=[];ncClearRegions();addObject('box',{x:10,y:10,z:10},'A');addObject('box',{x:10,y:10,z:10},'B');items[0].mesh.position.set(0,0,0);items[1].mesh.position.set(5,0,0);await performBoolean(items[0],items[1],${JSON.stringify(op)});return (await (await ncRequest('/evaluate',makeExactNode(items[0]))).json()).volume})()`),op);
   assert.ok(Math.abs(actual-want)<1e-6);
+ }
+ // Project download and open preserve exact recipes and both raw/exact sketch regions.
+ await page.evaluate(()=>testEval(`fixtureRect(30,30,10,10);`));
+ await page.locator('#ncFiles').click();
+ const savedEvent=page.waitForEvent('download');await page.locator('#ncSave').click();const saved=await savedEvent;const projectPath=await saved.path();const project=JSON.parse(fs.readFileSync(projectPath,'utf8'));
+ assert.equal(project.version,'5.0');assert.equal(project.sketchRegions.length,1);assert.ok(project.objects[0].exactRecipe);
+ await page.evaluate(()=>testEval(`ncClearRegions();items.forEach(o=>world.remove(o.mesh));items=[];`));
+ await page.locator('#fileInput').setInputFiles(projectPath);await page.waitForFunction(()=>testEval('items.length===1&&ncRegions.length===1'));
+ const before=await page.evaluate(()=>testEval('JSON.stringify(ncProjectData())'));
+ await page.locator('#fileInput').setInputFiles({name:'broken.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify({...project,objects:[{...project.objects[0],position:[null,0,0]}]}))});
+ assert.equal(await page.evaluate(()=>testEval('JSON.stringify(ncProjectData())')),before);
+ // Sketches participate in undo/redo along with solids.
+ await page.evaluate(()=>testEval(`snapshot();ncClearRegions();`));await page.evaluate(()=>testEval(`document.getElementById('undoBtn').click()`));assert.equal(await page.evaluate(()=>testEval('ncRegions.length')),1);
+ await page.evaluate(()=>testEval(`document.getElementById('redoBtn').click()`));assert.equal(await page.evaluate(()=>testEval('ncRegions.length')),0);
+ // Real browser CAD downloads and imports preserve exact volume.
+ for(const [button,extension] of [['ncExportSTEP','step'],['ncExportIGES','iges']]){
+  await page.locator('#'+button).click();await page.locator('#stepSaveNow').waitFor({state:'visible'});const event=page.waitForEvent('download');await page.locator('#stepSaveNow').click();const file=await event;assert.ok(file.suggestedFilename().endsWith('.'+extension));
+  const data=fs.readFileSync(await file.path());assert.ok(data.length>500);await page.locator('#stepSaveClose').click();
+  const n=await page.evaluate(()=>testEval('items.length'));await page.locator('#ncCADFile').setInputFiles({name:'roundtrip.'+extension,mimeType:'application/octet-stream',buffer:data});await page.waitForFunction(n=>testEval('items.length')===n+1,n);
+  const volume=await page.evaluate(()=>testEval(`(async()=>(await (await ncRequest('/evaluate',makeExactNode(items.at(-1)))).json()).volume)()`));assert.ok(Math.abs(volume-500)<1e-5);
+  await page.evaluate(()=>testEval(`const last=items.pop();world.remove(last.mesh);`));
+ }
+ for(const [button,extension] of [['ncExportSTL','stl'],['ncExportOBJ','obj'],['ncExport3MF','3mf']]){
+  const event=page.waitForEvent('download');await page.locator('#'+button).click();const file=await event;const data=fs.readFileSync(await file.path());assert.ok(data.length>100);
+  const n=await page.evaluate(()=>testEval('items.length'));await page.locator('#ncMeshFile').setInputFiles({name:'mesh.'+extension,mimeType:'application/octet-stream',buffer:data});await page.waitForFunction(n=>testEval('items.length')===n+1,n);
+  const dims=await page.evaluate(()=>testEval('items.at(-1).dims'));assert.ok(Math.abs(dims.x-5)<.01);assert.ok(Math.abs(dims.y-10)<.01);assert.ok(Math.abs(dims.z-10)<.01);
+  await page.evaluate(()=>testEval(`const last=items.pop();world.remove(last.mesh);`));
  }
  assert.deepEqual(errors,[]);
  }finally{await browser?.close();server.closeAllConnections();await new Promise(r=>server.close(r))}
