@@ -21,6 +21,8 @@ for(const [name,engine] of Object.entries({chromium,webkit}))test(name+' CAD geo
  assert.equal(await page.locator('#ncExtrude').isEnabled(),true);
  await page.locator('#ncExtrude').click();await page.locator('#ncPull').waitFor({state:'visible'});
  const box=await page.locator('#ncPull').boundingBox();assert.ok(box.x>=0&&box.y>=0&&box.x+box.width<1100&&box.y+box.height<800);
+ const handle=await page.locator('#ncPull .handle').boundingBox();await page.mouse.move(handle.x+handle.width/2,handle.y+handle.height/2);await page.mouse.down();await page.mouse.move(handle.x+handle.width/2,handle.y+handle.height/2-25);assert.ok(await page.locator('#ncDepth').inputValue()>0);await page.mouse.up();
+ await page.locator('#ncPull .handle').dispatchEvent('pointercancel');assert.equal(await page.evaluate(()=>testEval('nc.drag')),null);
  await page.locator('#ncDepth').fill('12');await page.locator('#ncDepth').dispatchEvent('change');await page.locator('#ncConfirm').click();
  await page.waitForFunction(()=>testEval('items.length')===1);
  assert.equal(await page.evaluate(()=>testEval('items.length')),1);
@@ -86,6 +88,12 @@ for(const [name,engine] of Object.entries({chromium,webkit}))test(name+' CAD geo
   const dims=await page.evaluate(()=>testEval('items.at(-1).dims'));assert.ok(Math.abs(dims.x-5)<.01);assert.ok(Math.abs(dims.y-10)<.01);assert.ok(Math.abs(dims.z-10)<.01);
   await page.evaluate(()=>testEval(`const last=items.pop();world.remove(last.mesh);`));
  }
+ // Draw a rectangle through real pointer gestures on the workplane.
+ await page.evaluate(()=>testEval(`items.forEach(o=>world.remove(o.mesh));items=[];ncClearRegions();ncSketchReset();ncSetTool('rectangle');`));
+ const stroke=await page.evaluate(()=>testEval(`[{x:-10,y:-5},{x:10,y:5}].map(q=>{const p=new THREE.Vector3(q.x,0,q.y).project(camera),r=canvas.getBoundingClientRect();return {x:r.left+(p.x+1)*r.width/2,y:r.top+(1-p.y)*r.height/2}})`));
+ await page.mouse.move(stroke[0].x,stroke[0].y);await page.mouse.down();await page.mouse.move(stroke[1].x,stroke[1].y,{steps:5});await page.mouse.up();assert.equal(await page.evaluate(()=>testEval('skClosed')),true);const drawnArea=await page.evaluate(()=>testEval(`Math.abs((skPoints[2].x-skPoints[0].x)*(skPoints[2].y-skPoints[0].y))`));assert.ok(Math.abs(drawnArea-200)<10);
+ await page.locator('#ncExtrude').click();await page.locator('#ncPull').waitFor({state:'visible'});await page.locator('#ncDepth').fill('5');await page.locator('#ncConfirm').click();await page.waitForFunction(()=>testEval('items.length===1&&!ncBusy'));
+ const drawnVolume=await page.evaluate(()=>testEval(`(async()=>(await (await ncRequest('/evaluate',makeExactNode(items[0]))).json()).volume)()`));assert.ok(Math.abs(drawnVolume-drawnArea*5)<.0001);
  fs.mkdirSync(path.join(root,'test-results'),{recursive:true});await page.screenshot({path:path.join(root,'test-results',name+'.png')});
  assert.deepEqual(errors,[]);
  }finally{await browser?.close();server.closeAllConnections();await new Promise(r=>server.close(r))}

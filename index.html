@@ -1369,7 +1369,7 @@ document.getElementById('modelToolsLaunch').onclick=()=>document.getElementById(
 document.querySelectorAll('#modelToolsTray [data-legacy]').forEach(b=>b.onclick=()=>{document.getElementById('modelToolsTray').classList.remove('open');document.getElementById(b.dataset.legacy)?.click()});
 document.getElementById('showLegacyPanels').onclick=()=>{const left=document.querySelector('.panel.left'),right=document.querySelector('.panel.right');const showing=left.style.getPropertyValue('display')==='block';for(const p of [left,right])p.style.setProperty('display',showing?'none':'block','important');if(!showing){left.style.cssText+=';position:absolute;top:0;left:0;bottom:0;width:245px;z-index:24';right.style.cssText+=';position:absolute;top:0;right:0;bottom:0;width:245px;z-index:24'}document.getElementById('modelToolsTray').classList.remove('open')};
 // Launch straight into the sketch editor on a new empty project.
-requestAnimationFrame(()=>skOpen());
+// The visible workspace initializes once at the end of the module.
 
 // v3: sketch entities are drawn in the actual perspective WebGL viewport, not a separate 2D canvas.
 const nc={mode:'sketch',tool:'line',points:[],arc:[],rectStart:null,circleStart:null,group:new THREE.Group(),surface:null,profile:null,preview:null,drag:null};
