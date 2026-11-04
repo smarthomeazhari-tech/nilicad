@@ -14,6 +14,7 @@ for(const [name,engine] of Object.entries({chromium,webkit}))test(name+' CAD geo
  browser=await engine.launch({headless:true,args:name==='chromium'?['--no-sandbox']:[]});const page=await browser.newPage({viewport:{width:1100,height:800},hasTouch:true});
  const errors=[];page.on('pageerror',e=>(errors.push(e.message),console.error(e.message)));
  await page.goto('http://127.0.0.1:'+server.address().port);await page.waitForFunction(()=>typeof window.testEval==='function',{},{timeout:10000});await page.waitForTimeout(100);
+ await page.locator('#ncFiles').click();await page.locator('#ncEngine').click();await page.locator('#cadLocalUrl').fill('http://127.0.0.1:8765');await page.locator('#cadSaveServer').click();await page.locator('#ncFiles').click();
  await page.evaluate(()=>testEval(`skPoints=[{x:-20,y:-20},{x:20,y:-20},{x:20,y:20},{x:-20,y:20}];skSegments=skPoints.map((a,i)=>({kind:'line',a,b:skPoints[(i+1)%4]}));skClosed=true;ncDraw();ncSaveRegion();skClosed=false;skSegments=[];skPoints=[];ncClearVisual();nc.mode='select';`));
  const screen=await page.evaluate(()=>testEval(`(()=>{const p=new THREE.Vector3(0,0,0).project(camera),r=canvas.getBoundingClientRect();return {x:r.left+(p.x+1)*r.width/2,y:r.top+(1-p.y)*r.height/2}})()`));
  await page.touchscreen.tap(screen.x,screen.y);
