@@ -1,0 +1,11 @@
+import {build} from 'esbuild';
+import {mkdir,copyFile,writeFile} from 'node:fs/promises';
+import {createRequire} from 'node:module';
+const require=createRequire(import.meta.url),out=new URL('./dist/',import.meta.url);
+await mkdir(out,{recursive:true});
+await build({entryPoints:[new URL('./worker.mjs',import.meta.url).pathname],bundle:true,platform:'browser',format:'esm',target:'es2022',external:['node:*'],outfile:new URL('worker.js',out).pathname,minify:true,legalComments:'linked'});
+await copyFile(require.resolve('replicad-opencascadejs/wasm'),new URL('occt.wasm',out));
+await copyFile(new URL('../node_modules/replicad-opencascadejs/LICENSE',import.meta.url),new URL('OCCT-LICENSE.txt',out));
+await copyFile(new URL('../node_modules/replicad/LICENSE',import.meta.url),new URL('REPLICAD-LICENSE.txt',out));
+await writeFile(new URL('NOTICE.txt',out),'NiliCAD browser CAD engine uses unmodified replicad-opencascadejs 1.1.0 (LGPL-2.1-only) and replicad 1.2.0 (MIT).\nSource and build instructions: https://github.com/sgenoud/replicad\nOpen CASCADE source: https://github.com/Open-Cascade-SAS/OCCT\nThe corresponding package source versions and their licenses are available through npm: replicad-opencascadejs@1.1.0 and replicad@1.2.0.\n');
+console.log('Browser OCCT worker and single-threaded WASM built.');

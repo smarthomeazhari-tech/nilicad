@@ -56,3 +56,13 @@ depend on ephemeral jobs. Preserve analytic arcs during splitting and extrusion.
 Do not present successful code generation as validated CAD behavior. Automated
 Chromium/WebKit tests are useful, but physical Safari/iPad Pencil and Windows
 browser checks remain a separate acceptance step.
+
+## Browser engine update (2026-11-05)
+
+The audit above describes the original baseline. The browser now defaults to a
+single-threaded OCCT WebAssembly kernel in a Web Worker. `ncRequest` selects the
+local worker adapter in browser mode and the existing HTTP adapter only when a
+remote/local server is explicitly chosen. Exact recipes and returned display
+meshes use the same data model, so existing projects remain compatible. STEP
+import/export runs in the worker; IGES and nonuniform transformations remain
+explicit limitations of the browser build. See browser-engine.md.
