@@ -1,0 +1,4 @@
+NiliCAD browser CAD engine uses unmodified replicad-opencascadejs 1.1.0 (LGPL-2.1-only) and replicad 1.2.0 (MIT).
+Source and build instructions: https://github.com/sgenoud/replicad
+Open CASCADE source: https://github.com/Open-Cascade-SAS/OCCT
+The corresponding package source versions and their licenses are available through npm: replicad-opencascadejs@1.1.0 and replicad@1.2.0.
