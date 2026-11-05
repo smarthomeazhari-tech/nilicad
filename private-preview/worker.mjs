@@ -20,7 +20,8 @@ export default {
   const supplied=credentials(request.headers.get('Authorization'));
   const [userOK,passwordOK]=await Promise.all([equal(supplied?.username||'',env.AUTH_USERNAME),equal(supplied?.password||'',env.AUTH_PASSWORD)]);
   if(!supplied||!userOK||!passwordOK){
-   try{const key='failed-login:'+request.headers.get('CF-Connecting-IP');const {success}=await env.LOGIN_LIMITER.limit({key});if(!success)return response('تعداد تلاش‌ها زیاد است؛ یک دقیقه دیگر امتحان کنید.',429,{'Retry-After':'60'})}catch{return response('کنترل ورود موقتاً در دسترس نیست.',503)}
+   // A missing header is the normal browser challenge, not a failed password attempt.
+   if(request.headers.has('Authorization')){try{const key='failed-login:'+request.headers.get('CF-Connecting-IP');const {success}=await env.LOGIN_LIMITER.limit({key});if(!success)return response('تعداد تلاش‌ها زیاد است؛ یک دقیقه دیگر امتحان کنید.',429,{'Retry-After':'60'})}catch{return response('کنترل ورود موقتاً در دسترس نیست.',503)}}
    return response('برای ورود به NiliCAD نام کاربری و رمز عبور لازم است.',401,{'WWW-Authenticate':challenge});
   }
   if(!['GET','HEAD'].includes(request.method))return response('Method not allowed.',405,{'Allow':'GET, HEAD'});
