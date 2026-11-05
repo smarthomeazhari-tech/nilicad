@@ -28,3 +28,14 @@ that configuration is applied. The root page remains the preserved main version.
 The exact `/nilicad/preview/` path was exercised locally in Chromium and WebKit:
 sample project loaded, relative module/worker/WASM assets loaded, the exact cube
 volume was 1000 mm³, and no HTTP geometry requests or asset failures occurred.
+
+
+## Privacy update
+
+At the owner's request, this publication branch now serves only an access notice.
+The unauthenticated app, model JSON, JavaScript and WASM artifacts were removed
+from the Pages publication. Browser-only source and prior commits remain in the
+repository; this change does not make a public repository private or recall
+previously downloaded copies. Private host credentials and claim links are not
+recorded in this repository. See private-preview/ on feat/private-preview-auth
+for the server-side authentication implementation and deployment instructions.
