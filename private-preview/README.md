@@ -30,8 +30,12 @@ credentials are not forwarded to the asset binding or written to logs.
 6. Open the HTTPS `workers.dev` URL returned by Cloudflare and verify both a
    rejected login and a successful login with model/geometry loading.
 
-The Cloudflare account is not connected to the current execution environment;
-this work does **not** claim a live protected deployment.
+A permanent Cloudflare account is not connected to the current execution
+environment. Wrangler also supports `deploy --temporary`: it can create a
+protected preview before account login. Such an account must be claimed by its
+intended owner within 60 minutes of initial creation or its resources are deleted.
+The claim link is a bearer credential: deliver it only to the owner, never to a
+repository or issue. A temporary preview is not permanent production hosting.
 
 ## Deploy from the Cloudflare dashboard
 
