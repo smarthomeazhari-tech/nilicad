@@ -13,6 +13,10 @@ jobs:
       - run: npx playwright install --with-deps chromium webkit
       - name: Verify WebAssembly geometry and browser workflows without a backend
         run: npm test
+      - name: Validate protected Worker deployment bundle without publishing
+        run: npx wrangler deploy --dry-run --config private-preview/wrangler.jsonc --outdir /tmp/nilicad-private-worker
+        env:
+          WRANGLER_SEND_METRICS: 'false'
       - uses: actions/upload-artifact@v4
         if: always()
         with:

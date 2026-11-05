@@ -1,0 +1,17 @@
+{
+  "$schema": "../node_modules/wrangler/config-schema.json",
+  "name": "nilicad-private",
+  "main": "worker.mjs",
+  "compatibility_date": "2026-11-05",
+  "workers_dev": true,
+  "assets": {
+    "directory": "./dist",
+    "binding": "ASSETS",
+    "run_worker_first": true
+  },
+  "ratelimits": [{
+    "name": "LOGIN_LIMITER",
+    "namespace_id": "11072026",
+    "simple": {"limit": 10, "period": 60}
+  }]
+}
