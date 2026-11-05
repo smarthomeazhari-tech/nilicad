@@ -8,13 +8,14 @@ for(const [name,engine] of Object.entries({chromium,webkit}))test(name+' CAD geo
  const root=path.resolve(__dirname,'..');
  const server=http.createServer((req,res)=>{
   let file=req.url==='/'?'index.html':req.url.slice(1);
-  try{let data=fs.readFileSync(path.join(root,file));if(file==='index.html')data=Buffer.from(data.toString().replace('https://cdn.jsdelivr.net/npm/three@0.164.1/build/three.module.js','/node_modules/three/build/three.module.js').replace('https://cdn.jsdelivr.net/npm/three@0.164.1/examples/jsm/','/node_modules/three/examples/jsm/').replace('\n</script>\n<input type="file" id="ncCADFile"','\nwindow.testEval=code=>eval(code);\n</script>\n<input type="file" id="ncCADFile"'));res.setHeader('Content-Type',file.endsWith('.js')?'application/javascript':'text/html');res.end(data)}catch{res.writeHead(404);res.end()}
+  try{let data=fs.readFileSync(path.join(root,file));if(file==='index.html')data=Buffer.from(data.toString().replace('https://cdn.jsdelivr.net/npm/three@0.164.1/build/three.module.js','/node_modules/three/build/three.module.js').replace('https://cdn.jsdelivr.net/npm/three@0.164.1/examples/jsm/','/node_modules/three/examples/jsm/').replace('\n</script>\n<input type="file" id="ncCADFile"','\nwindow.testEval=code=>eval(code);\n</script>\n<input type="file" id="ncCADFile"'));res.setHeader('Content-Type',/\.(js|mjs)$/.test(file)?'application/javascript':file.endsWith('.wasm')?'application/wasm':'text/html');res.end(data)}catch{res.writeHead(404);res.end()}
  });await new Promise(r=>server.listen(0,'127.0.0.1',r));
  let browser;try{
  browser=await engine.launch({headless:true,args:name==='chromium'?['--no-sandbox']:[]});const page=await browser.newPage({viewport:{width:1100,height:800},hasTouch:true});
+ const remoteAPI=[];page.on('request',request=>{if(/8765|onrender\.com|\/evaluate$|\/regions$/.test(request.url()))remoteAPI.push(request.url())});
  const errors=[];page.on('pageerror',e=>(errors.push(e.message),console.error(e.message)));
  await page.goto('http://127.0.0.1:'+server.address().port);await page.waitForFunction(()=>typeof window.testEval==='function',{},{timeout:10000});await page.waitForTimeout(100);
- await page.locator('#ncFiles').click();await page.locator('#ncEngine').click();await page.locator('#cadLocalUrl').fill('http://127.0.0.1:8765');await page.locator('#cadSaveServer').click();await page.locator('#ncFiles').click();
+ await page.locator('#ncFiles').click();await page.locator('#ncEngine').click();await page.locator('input[name=cadServerMode][value=browser]').check();await page.locator('#cadSaveServer').click();await page.locator('#ncFiles').click();
  await page.evaluate(()=>testEval(`skPoints=[{x:-20,y:-20},{x:20,y:-20},{x:20,y:20},{x:-20,y:20}];skSegments=skPoints.map((a,i)=>({kind:'line',a,b:skPoints[(i+1)%4]}));skClosed=true;ncDraw();ncSaveRegion();skClosed=false;skSegments=[];skPoints=[];ncClearVisual();nc.mode='select';`));
  const screen=await page.evaluate(()=>testEval(`(()=>{const p=new THREE.Vector3(0,0,0).project(camera),r=canvas.getBoundingClientRect();return {x:r.left+(p.x+1)*r.width/2,y:r.top+(1-p.y)*r.height/2}})()`));
  await page.touchscreen.tap(screen.x,screen.y);
@@ -58,9 +59,9 @@ for(const [name,engine] of Object.entries({chromium,webkit}))test(name+' CAD geo
  // A server error must leave both operands and their recipes untouched.
  await page.evaluate(()=>testEval(`addObject('box',{x:10,y:10,z:10},'Failure operand');`));
  const operands=await page.evaluate(()=>testEval('JSON.stringify(state())'));
- await page.route('**/evaluate',route=>route.fulfill({status:503,contentType:'application/json',body:JSON.stringify({detail:'Regression: unavailable kernel'})}));
+ await page.evaluate(()=>testEval(`window.savedRequest=ncRequest;ncRequest=async()=>{throw Error('Regression: unavailable kernel')}`));
  await page.evaluate(()=>testEval(`performBoolean(items[0],items[1],'union')`));
- assert.equal(await page.evaluate(()=>testEval('JSON.stringify(state())')),operands);await page.unroute('**/evaluate');
+ assert.equal(await page.evaluate(()=>testEval('JSON.stringify(state())')),operands);await page.evaluate(()=>testEval(`ncRequest=window.savedRequest`));
  await page.evaluate(()=>testEval(`const extra=items.pop();world.remove(extra.mesh);fixtureRect(30,30,10,10);`));
  await page.locator('#ncSplit').click();await page.waitForFunction(()=>testEval('ncRegions.length===1&&ncRegions[0].brep'));
  await page.evaluate(()=>testEval(`fixtureRect(50,50,10,10);`));
@@ -76,7 +77,7 @@ for(const [name,engine] of Object.entries({chromium,webkit}))test(name+' CAD geo
  await page.evaluate(()=>testEval(`snapshot();ncClearRegions();`));await page.evaluate(()=>testEval(`document.getElementById('undoBtn').click()`));assert.equal(await page.evaluate(()=>testEval('ncRegions.length')),2);
  await page.evaluate(()=>testEval(`document.getElementById('redoBtn').click()`));assert.equal(await page.evaluate(()=>testEval('ncRegions.length')),0);
  // Real browser CAD downloads and imports preserve exact volume.
- for(const [button,extension] of [['ncExportSTEP','step'],['ncExportIGES','iges']]){
+ for(const [button,extension] of [['ncExportSTEP','step']]){
   await page.locator('#'+button).click();await page.locator('#stepSaveNow').waitFor({state:'visible'});const event=page.waitForEvent('download');await page.locator('#stepSaveNow').click();const file=await event;assert.ok(file.suggestedFilename().endsWith('.'+extension));
   const data=fs.readFileSync(await file.path());assert.ok(data.length>500);await page.locator('#stepSaveClose').click();
   const n=await page.evaluate(()=>testEval('items.length'));await page.locator('#ncCADFile').setInputFiles({name:'roundtrip.'+extension,mimeType:'application/octet-stream',buffer:data});await page.waitForFunction(n=>testEval('items.length')===n+1,n);
@@ -96,6 +97,8 @@ for(const [name,engine] of Object.entries({chromium,webkit}))test(name+' CAD geo
  await page.locator('#ncExtrude').click();await page.locator('#ncPull').waitFor({state:'visible'});await page.locator('#ncDepth').fill('5');await page.locator('#ncConfirm').click();await page.waitForFunction(()=>testEval('items.length===1&&!ncBusy'));
  const drawnVolume=await page.evaluate(()=>testEval(`(async()=>(await (await ncRequest('/evaluate',makeExactNode(items[0]))).json()).volume)()`));assert.ok(Math.abs(drawnVolume-drawnArea*5)<.0001);
  fs.mkdirSync(path.join(root,'test-results'),{recursive:true});await page.screenshot({path:path.join(root,'test-results',name+'.png')});
+ assert.equal(await page.locator('#ncExportIGES').isDisabled(),true);
+ assert.deepEqual(remoteAPI,[],'No geometry request may leave the browser');
  assert.deepEqual(errors,[]);
  }finally{await browser?.close();server.closeAllConnections();await new Promise(r=>server.close(r))}
 });

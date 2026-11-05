@@ -1,3 +1,10 @@
+# Current browser-only path (2026-11-05)
+
+Run `npm ci && npm test`; no backend is needed. The default engine runs OCCT
+WebAssembly in a Worker. See [browser-engine.md](browser-engine.md) for build,
+distribution, tests and format limits. The paired-server instructions below
+describe the optional server mode and earlier verification.
+
 # Running and validating the paired changes
 
 The main branches have not been modified or merged. PRs are stacked so each

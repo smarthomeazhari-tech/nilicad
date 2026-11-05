@@ -686,12 +686,14 @@ function makeExactNode(o){
 
 const cadServerStorageKey='nilicad_occt_profiles_v1';
 function cadServerProfiles(){
- try{return Object.assign({mode:'local',local:'http://127.0.0.1:8765',cloud:''},JSON.parse(localStorage.getItem(cadServerStorageKey)||'{}'))}
- catch{return {mode:'local',local:'http://127.0.0.1:8765',cloud:''}}
+ try{return Object.assign({mode:'browser',local:'http://127.0.0.1:8765',cloud:''},JSON.parse(localStorage.getItem(cadServerStorageKey)||'{}'))}
+ catch{return {mode:'browser',local:'http://127.0.0.1:8765',cloud:''}}
 }
+function cadBrowserMode(){return cadServerProfiles().mode==='browser'}
+function cadUpdateEngineUI(){const button=document.getElementById('ncExportIGES');button.disabled=cadBrowserMode();button.title=cadBrowserMode()?'موتور مرورگر برای تبادل CAD از STEP پشتیبانی می‌کند':''}
 function cadSelectedUrl(){
  const p=cadServerProfiles();
- return (p.mode==='cloud'?p.cloud:p.local).trim().replace(/\/+$/,'');
+ return (p.mode==='browser'?'':p.mode==='cloud'?p.cloud:p.local).trim().replace(/\/+$/,'');
 }
 function cadServerPanel(show){
  const panel=document.getElementById('cadServerPanel');
@@ -712,18 +714,20 @@ function cadSaveProfiles(){
  if(mode==='local'&&!/^https?:\/\//i.test(local))throw new Error('آدرس سرور ویندوز معتبر نیست');
  const p={mode,local,cloud};
  localStorage.setItem(cadServerStorageKey,JSON.stringify(p));
- return p;
+ cadUpdateEngineUI();return p;
 }
 document.getElementById('serverSettingsBtn').onclick=()=>cadServerPanel(true);
 document.getElementById('cadCloseServer').onclick=()=>cadServerPanel(false);
 document.getElementById('cadSaveServer').onclick=()=>{
- try{const p=cadSaveProfiles();cadServerPanel(false);toast('موتور '+(p.mode==='local'?'ویندوز':'اینترنتی')+' انتخاب شد')}
+ try{const p=cadSaveProfiles();cadServerPanel(false);toast(p.mode==='browser'?'موتور مرورگر انتخاب شد؛ سرور لازم نیست':'موتور '+(p.mode==='local'?'ویندوز':'اینترنتی')+' انتخاب شد')}
  catch(e){document.getElementById('cadServerStatus').textContent=e.message}
 };
 document.getElementById('cadTestServer').onclick=async()=>{
  const status=document.getElementById('cadServerStatus');
  try{
-  const p=cadSaveProfiles(),url=(p.mode==='local'?p.local:p.cloud).replace(/\/+$/,'');
+  const p=cadSaveProfiles();
+  if(p.mode==='browser'){status.textContent='آماده‌سازی و آزمایش موتور مرورگر…';const health=await (await ncRequest('/health',{})).json(),box=await (await ncRequest('/evaluate',{type:'box',dims:{x:10,y:10,z:10}})).json();if(!box.valid||Math.abs(box.volume-1000)>.001)throw Error('آزمایش هندسی موتور موفق نبود');status.textContent='موتور '+health.kernel+' آماده است؛ آزمایش حجم ۱۰۰۰ میلی‌متر مکعب موفق بود';return}
+  const url=(p.mode==='local'?p.local:p.cloud).replace(/\/+$/,'');
   status.textContent='در حال بررسی اتصال...';
   const controller=new AbortController();
   const timeout=setTimeout(()=>controller.abort(),8000);
@@ -924,6 +928,7 @@ async function exportExactSTEP(){
  let totalTimer=null;
  try{
   if(!items.length){toast('ابتدا یک قطعه بسازید');return}
+  if(cadBrowserMode()){showStepTransfer('تولید فایل STEP داخل مرورگر…');const payload={objects:items.map(makeExactNode)};const response=await ncRequest('/export-step',payload);if(controller.signal.aborted)return;showStepSave(await response.blob());toast('فایل STEP داخل مرورگر ساخته شد');return}
   const url=cadSelectedUrl();
   if(!url){cadServerPanel(true);toast('ابتدا آدرس موتور را تنظیم کنید');return}
   if(location.protocol==='https:'&&url.startsWith('http:'))throw new Error('آدرس موتور باید HTTPS باشد');
@@ -1105,7 +1110,7 @@ async function beginBoolean(op){
  booleanBanner.classList.add('active');
  document.getElementById('booleanText').textContent='در حال آماده‌سازی موتور هندسی…';
  try{
-  if(!cadSelectedUrl())throw Error('آدرس موتور CAD تنظیم نشده است');
+  if(!cadBrowserMode()&&!cadSelectedUrl())throw Error('آدرس موتور CAD تنظیم نشده است');
   if(!booleanPending)return;
   document.getElementById('booleanText').textContent=({union:'اتصال',subtract:'تفریق',intersect:'اشتراک'}[op])+' — حجم دوم را لمس کنید';
   ncMessage('حجم اول: '+selected.name+'؛ حالا حجم دوم را انتخاب کنید');
@@ -1123,7 +1128,9 @@ function brushFor(o){
  return b;
 }
 let ncBusy=false;
+let ncBrowserModule;
 async function ncRequest(path,payload,raw=false){
+ if(cadBrowserMode()){ncBrowserModule??=import('./browser-engine/client.mjs');const {browserRequest}=await ncBrowserModule;return browserRequest(path,payload,ncMessage)}
  const url=cadSelectedUrl();if(!url)throw Error('ابتدا آدرس موتور CAD را تنظیم کنید');
  const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),120000);
  try{const response=await fetch(url+path,{method:'POST',headers:{'Content-Type':raw?'application/octet-stream':'application/json'},body:raw?payload:JSON.stringify(payload),signal:controller.signal});if(!response.ok){let detail=await response.text();try{detail=JSON.parse(detail).detail}catch{}throw Error(String(detail).slice(0,350))}return response}
@@ -1532,7 +1539,7 @@ async function ncStartPull(){
  if(!ncSelectedRegions.size){ncMessage('ابتدا یک یا چند ناحیه مستقل را انتخاب کنید');return}
  ncDepth.value='0';nc.mode='pull';document.getElementById('ncConfirm').style.display='flex';ncPullPreview();ncMessage(ncSelectedRegions.size+' ناحیه انتخاب شده؛ فلش را بکشید یا عمق وارد کنید');
 }
-const ncHandle=ncPull.querySelector('.handle');ncHandle.addEventListener('pointerdown',e=>{nc.drag={id:e.pointerId,y:e.clientY,depth:Number(ncDepth.value)||0};ncHandle.setPointerCapture(e.pointerId);e.preventDefault()});ncHandle.addEventListener('pointermove',e=>{if(!nc.drag||e.pointerId!==nc.drag.id)return;ncDepth.value=(nc.drag.depth+(nc.drag.y-e.clientY)*.4).toFixed(1);ncPullPreview()});ncHandle.addEventListener('pointerup',()=>nc.drag=null);ncHandle.addEventListener('pointercancel',()=>nc.drag=null);ncHandle.addEventListener('lostpointercapture',()=>nc.drag=null);ncDepth.addEventListener('change',ncPullPreview);
+const ncHandle=ncPull.querySelector('.handle');ncHandle.addEventListener('pointerdown',e=>{nc.drag={id:e.pointerId,y:e.clientY,depth:Number(ncDepth.value)||0};ncHandle.setPointerCapture(e.pointerId);e.preventDefault()});ncHandle.addEventListener('pointermove',e=>{if(!nc.drag||e.pointerId!==nc.drag.id)return;ncDepth.value=(nc.drag.depth+(nc.drag.y-e.clientY)*.4).toFixed(1);ncPositionPull();clearTimeout(nc._previewTimer);nc._previewTimer=setTimeout(ncPullPreview,80)});ncHandle.addEventListener('pointerup',()=>nc.drag=null);ncHandle.addEventListener('pointercancel',()=>nc.drag=null);ncHandle.addEventListener('lostpointercapture',()=>nc.drag=null);ncDepth.addEventListener('change',ncPullPreview);
 async function ncFinish(){
  if(nc.mode!=='pull'||ncBusy)return;
  const depth=Number(ncDepth.value);if(!Number.isFinite(depth)||Math.abs(depth)<.01||Math.abs(depth)>10000){ncMessage('عمق باید بین ۰٫۰۱ و ۱۰۰۰۰ میلی‌متر باشد');return}
@@ -1740,7 +1747,7 @@ canvas.addEventListener('pointerup',e=>{if((nc.mode==='sketch'||nc.mode==='selec
 controls.addEventListener('change',()=>{if(nc.mode==='pull')ncPositionPull()});
 // Disable legacy full-screen sketch dialog; start on the perspective workplane.
 skOpen=function(){ncSketchReset();nc.mode='sketch';ncSetTool('line')};
-skW.classList.remove('open');ncSketchReset();ncSetTool('line');
+skW.classList.remove('open');ncSketchReset();ncSetTool('line');cadUpdateEngineUI();
 
 </script>
 <input type="file" id="ncCADFile" accept=".step,.stp,.iges,.igs" hidden><input type="file" id="ncMeshFile" accept=".stl,.obj,.3mf" hidden><div id="ncTop"><button class="ncBtn" id="ncHome">⌂</button><span class="ncTitle">NiliCAD v4.2.0 · <span id="ncProject">Untitled Project</span></span><button class="ncBtn" id="ncMenu">•••</button></div>
@@ -1766,7 +1773,9 @@ skW.classList.remove('open');ncSketchReset();ncSetTool('line');
 <div id="cadBuild" style="position:fixed;bottom:3px;right:7px;z-index:1;font:10px sans-serif;color:#81919e;pointer-events:none">NiliCAD v4.2.0</div>
 <div id="cadServerPanel" style="display:none;position:fixed;inset:0;z-index:99990;background:#0009;align-items:center;justify-content:center;direction:rtl">
  <div style="background:#1e293b;color:white;border:1px solid #64748b;border-radius:16px;padding:20px;width:min(440px,92vw);box-shadow:0 12px 45px #0009">
-  <h3 style="margin:0 0 12px">انتخاب محل موتور Open CASCADE</h3>
+  <h3 style="margin:0 0 12px">انتخاب موتور CAD</h3>
+  <label style="display:block;margin:8px 0"><input type="radio" name="cadServerMode" value="browser"> داخل مرورگر — بدون سرور</label>
+  <p style="font-size:12px;line-height:1.7">موتور دقیق Open CASCADE روی دستگاه اجرا می‌شود. در اولین استفاده حدود ۲۲ مگابایت دریافت می‌شود. تبادل فایل CAD در این حالت با STEP انجام می‌شود.</p>
   <label style="display:block;margin:8px 0"><input type="radio" name="cadServerMode" value="local"> کامپیوتر ویندوز / شبکه داخلی</label>
   <label style="display:block;margin:8px 0"><input type="radio" name="cadServerMode" value="cloud"> سرور اینترنتی</label>
   <label style="display:block;margin-top:12px">آدرس موتور ویندوز</label>
