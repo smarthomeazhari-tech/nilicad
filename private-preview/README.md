@@ -3,7 +3,7 @@
 This is a deployable Cloudflare Worker in front of the existing browser-only CAD
 application. The browser shows its native HTTP Basic username/password dialog.
 The Worker authenticates **every** request before returning HTML, model JSON,
-JavaScript or the OCCT WASM binary. It does not run a CAD backend.
+JavaScript or any OCCT WASM part. It does not run a CAD backend.
 
 Credentials are Cloudflare Secrets (`AUTH_USERNAME`, `AUTH_PASSWORD`), never
 embedded in frontend source or committed to Git. The password must have at least
@@ -81,3 +81,7 @@ Cloudflare references:
 - https://developers.cloudflare.com/workers/static-assets/routing/worker-script/
 - https://developers.cloudflare.com/workers/runtime-apis/bindings/rate-limit/
 - https://developers.cloudflare.com/workers/configuration/secrets/
+
+The unmodified WASM is packaged as hashed parts of at most 4 MiB. The browser
+reassembles them in its Worker and verifies the full SHA-256 before compilation.
+This supports hosts whose individual static-asset size limit is below 22 MiB.
