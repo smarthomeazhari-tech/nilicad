@@ -1081,10 +1081,10 @@ select=function(obj){directHidden=false;oldDirectSelect(obj);updateDirectPalette
 
 
 // Mesh boolean via optional three-bvh-csg engine; loaded only when user starts an operation.
-let booleanPending=null, booleanModule=null;
+let booleanPending=null, booleanModule=null,booleanEpoch=0;
 const booleanBanner=document.getElementById('booleanBanner');
 document.getElementById('booleanCancel').onclick=()=>cancelBoolean();
-function cancelBoolean(){booleanPending=null;booleanBanner.classList.remove('active');toast('عملیات لغو شد')}
+function cancelBoolean(){++booleanEpoch;booleanPending=null;booleanBanner.classList.remove('active');controls.enabled=true;toast('عملیات پایان یافت')}
 async function loadBooleanEngine(){
  if(booleanModule)return booleanModule;
  const sources=[
@@ -1102,7 +1102,9 @@ async function loadBooleanEngine(){
  throw lastError||Error('موتور بارگذاری نشد');
 }
 async function beginBoolean(op){
+ if(ncBusy)return;
  if(!selected){ncMessage('ابتدا حجم اول را با قلم انتخاب کنید');toast('حجم اول انتخاب نشده است');return}
+ stopMove();
  if(draftMode)endDraft();
  if(gizmoMode){gizmo.detach();gizmoMode=null;controls.enabled=true}
  nc.mode='select';
@@ -1148,17 +1150,20 @@ function ncExactObject(data,recipe,name,id=nextId++){
 }
 async function performBoolean(a,b,op,opts={}){
  if(ncBusy||a===b)return;
+ const epoch=booleanEpoch;
  ncBusy=true;ncMessage('محاسبه دقیق OCCT…');
  try{
   const recipe={op,left:makeExactNode(a),right:makeExactNode(b)};
   const data=await (await ncRequest('/evaluate',recipe)).json();
-  if(!data.indices.length){ncMessage('نتیجه هندسی خالی است؛ قطعات حفظ شدند');cancelBoolean();return}
-  const obj=ncExactObject(data,recipe,a.name,a.id);obj.featureMaster=structuredClone(recipe);obj.operations=[...(a.operations||[]),{kind:op,tool:b.name}];
+  if(epoch!==booleanEpoch)return;
+  if(!items.includes(a)||(!opts.temporaryCutter&&!items.includes(b)))throw Error('قطعات ورودی تغییر کرده‌اند؛ عملیات را دوباره اجرا کنید');
+  const obj=data.indices.length?ncExactObject(data,recipe,a.name,a.id):null;
+  if(obj){obj.featureMaster=structuredClone(recipe);obj.operations=[...(a.operations||[]),{kind:op,tool:b.name}]}
   snapshot();gizmo.detach();gizmoMode=null;
   for(const o of [a,b]){world.remove(o.mesh);o.mesh.geometry.dispose()}
-  items=items.filter(o=>o!==a&&o!==b);world.add(obj.mesh);items.push(obj);
-  cancelBoolean();select(obj);refreshList();ncMessage('عملیات دقیق OCCT انجام شد؛ حجم '+data.volume.toFixed(3)+' mm³');
- }catch(err){cancelBoolean();ncMessage('خطای Boolean: '+err.message)}finally{ncBusy=false}
+  items=items.filter(o=>o!==a&&o!==b);if(obj){world.add(obj.mesh);items.push(obj)}
+  cancelBoolean();select(obj);refreshList();ncMessage(obj?'عملیات دقیق OCCT انجام شد؛ حجم '+data.volume.toFixed(3)+' mm³':'نتیجه خالی است؛ قطعات ورودی حذف شدند. برای بازگشت Undo بزنید');
+ }catch(err){cancelBoolean();ncMessage('خطای Boolean: '+err.message)}finally{ncBusy=false;controls.enabled=true}
 }
 
 // v2.7.0: editable parametric feature tree. Rebuilds preview using the existing
@@ -1742,13 +1747,15 @@ canvas.addEventListener('pointerup',e=>{
  raycaster.setFromCamera(pointer,camera);
  const hit=raycaster.intersectObjects(items.map(o=>o.mesh),false)[0];
  if(hit&&hit.object!==booleanPending.base.mesh){const b=items.find(o=>o.mesh===hit.object);if(b)performBoolean(booleanPending.base,b,booleanPending.op)}
- e.stopImmediatePropagation();e.preventDefault();
+ e.preventDefault();
 },true);
 canvas.addEventListener('pointerdown',ncPenDown,true);
 canvas.addEventListener('pointermove',ncPenMove,true);
 canvas.addEventListener('pointerup',ncPenUp,true);
 function ncCancelPen(e){
  if(ncPen.active?.id!==e.pointerId)return;
+ // OrbitControls never received this drawing pointer's down event.
+ e.stopImmediatePropagation?.();
  ncPen.active=null;ncTapDown=null;
  if(ncStrokePreview){nc.group.remove(ncStrokePreview);ncStrokePreview.geometry.dispose();ncStrokePreview.material.dispose();ncStrokePreview=null}
  if(canvas.hasPointerCapture(e.pointerId))canvas.releasePointerCapture(e.pointerId);
@@ -1759,7 +1766,7 @@ canvas.addEventListener('lostpointercapture',ncCancelPen,true);
 const ncTouches=new Map();let ncMultiTouch=false;
 canvas.addEventListener('pointerdown',e=>{if(e.pointerType!=='touch')return;if(!ncTouches.size)ncMultiTouch=false;ncTouches.set(e.pointerId,{x:e.clientX,y:e.clientY});if(ncTouches.size>1)ncMultiTouch=true},true);
 canvas.addEventListener('pointermove',e=>{const t=ncTouches.get(e.pointerId);if(t&&Math.hypot(e.clientX-t.x,e.clientY-t.y)>10)t.moved=true},true);
-canvas.addEventListener('pointerup',e=>{const t=ncTouches.get(e.pointerId);ncTouches.delete(e.pointerId);if(!t||t.moved||ncMultiTouch||booleanPending||!['select','sketch'].includes(nc.mode))return;ncPenDown({pointerType:'mouse',button:0,clientX:e.clientX,clientY:e.clientY,preventDefault:()=>e.preventDefault(),stopImmediatePropagation:()=>e.stopImmediatePropagation()});if(ncPen.active)ncPen.active=null},true);
+canvas.addEventListener('pointerup',e=>{const t=ncTouches.get(e.pointerId);ncTouches.delete(e.pointerId);if(!t||t.moved||ncMultiTouch||booleanPending||!['select','sketch'].includes(nc.mode))return;ncPenDown({pointerType:'mouse',button:0,clientX:e.clientX,clientY:e.clientY,preventDefault:()=>e.preventDefault(),stopImmediatePropagation:()=>{}});if(ncPen.active)ncPen.active=null},true);
 canvas.addEventListener('pointercancel',e=>ncTouches.delete(e.pointerId),true);
 // Ignore finger taps in sketch mode; fingers are reserved for camera navigation.
 canvas.addEventListener('pointerup',e=>{if((nc.mode==='sketch'||nc.mode==='select')&&e.pointerType==='touch'){ncTapDown=null}},true);
