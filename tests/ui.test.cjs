@@ -4,14 +4,14 @@ const {chromium,webkit}=require('playwright');
 const fs=require('node:fs');
 const path=require('node:path');
 const http=require('node:http');
-for(const [name,engine] of Object.entries({chromium,webkit}))test(name+' CAD geometry, interaction and file round trips',async()=>{
+for(const [name,engine] of Object.entries({chromium,webkit}))test(name+' CAD geometry, interaction and file round trips',async t=>{
  const root=path.resolve(__dirname,'..');
  const server=http.createServer((req,res)=>{
   let file=req.url==='/'?'index.html':req.url.slice(1);
   try{let data=fs.readFileSync(path.join(root,file));if(file==='index.html')data=Buffer.from(data.toString().replace('https://cdn.jsdelivr.net/npm/three@0.164.1/build/three.module.js','/node_modules/three/build/three.module.js').replace('https://cdn.jsdelivr.net/npm/three@0.164.1/examples/jsm/','/node_modules/three/examples/jsm/').replace('\n</script>\n<input type="file" id="ncCADFile"','\nwindow.testEval=code=>eval(code);\n</script>\n<input type="file" id="ncCADFile"'));res.setHeader('Content-Type',/\.(js|mjs)$/.test(file)?'application/javascript':file.endsWith('.wasm')?'application/wasm':'text/html');res.end(data)}catch{res.writeHead(404);res.end()}
  });await new Promise(r=>server.listen(0,'127.0.0.1',r));
  let browser;try{
- browser=await engine.launch({headless:true,args:name==='chromium'?['--no-sandbox']:[]});const page=await browser.newPage({viewport:{width:1100,height:800},hasTouch:true});
+ browser=await engine.launch({headless:true,args:name==='chromium'?['--no-sandbox']:[]});t.diagnostic('OS '+process.platform+' '+require('node:os').release()+'; '+name+' '+browser.version());const page=await browser.newPage({viewport:{width:1100,height:800},hasTouch:true});
  const remoteAPI=[];page.on('request',request=>{if(/8765|onrender\.com|\/evaluate$|\/regions$/.test(request.url()))remoteAPI.push(request.url())});
  const errors=[];page.on('pageerror',e=>(errors.push(e.message),console.error(e.message)));
  await page.goto('http://127.0.0.1:'+server.address().port);await page.waitForFunction(()=>typeof window.testEval==='function',{},{timeout:10000});await page.waitForTimeout(100);

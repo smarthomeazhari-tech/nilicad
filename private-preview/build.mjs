@@ -14,7 +14,7 @@ html=html.replace(marker,`\n(async()=>{try{const response=await fetch('./demo.js
 // Keep the geometry worker separate so the UI can render before OCCT is downloaded.
 const application=html.match(/<script type="module">([\s\S]*?)<\/script>/);
 if(!application)throw Error('Application module missing');
-await bundle({stdin:{contents:application[1]+`\nwindow.ncStartupReady=true;clearTimeout(window.ncStartupTimer);\n`,resolveDir:root,sourcefile:'cad-application.js'},outfile:resolve(dist,'app.js'),bundle:true,format:'iife',target:['safari15'],plugins:[{name:'browser-worker-url',setup(build){build.onLoad({filter:/browser-engine\/client\.mjs$/},async args=>({contents:(await readFile(args.path,'utf8')).replace("new URL('./dist/worker.js',import.meta.url)","new URL('./browser-engine/dist/worker.js',document.baseURI)"),loader:'js'}))}}]});
+await bundle({stdin:{contents:application[1]+`\nwindow.ncStartupReady=true;clearTimeout(window.ncStartupTimer);\n`,resolveDir:root,sourcefile:'cad-application.js'},outfile:resolve(dist,'app.js'),bundle:true,format:'iife',target:['safari15'],plugins:[{name:'browser-worker-url',setup(build){build.onLoad({filter:/browser-engine[\\/]client\.mjs$/},async args=>({contents:(await readFile(args.path,'utf8')).replace("new URL('./dist/worker.js',import.meta.url)","new URL('./browser-engine/dist/worker.js',document.baseURI)"),loader:'js'}))}}]});
 html=html.replace(application[0],'<script defer src="./app.js"></script>');
 html=html.replace(/<script type="importmap">[\s\S]*?<\/script>/,'');
 html=html.replace('</head>',`<script>
