@@ -64,5 +64,5 @@ single-threaded OCCT WebAssembly kernel in a Web Worker. `ncRequest` selects the
 local worker adapter in browser mode and the existing HTTP adapter only when a
 remote/local server is explicitly chosen. Exact recipes and returned display
 meshes use the same data model, so existing projects remain compatible. STEP
-import/export runs in the worker; IGES and nonuniform transformations remain
-explicit limitations of the browser build. See browser-engine.md.
+import/export runs in the worker. A later optional isolated converter adds IGES
+through exact STEP transfer; nonuniform transformations remain unsupported. See browser-engine.md.

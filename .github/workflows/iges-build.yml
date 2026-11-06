@@ -2,7 +2,9 @@ name: Build optional browser IGES converter
 on:
   push:
     paths:
-      - browser-engine/iges/**
+      - browser-engine/iges/converter.cpp
+      - browser-engine/iges/custom-build.yml
+      - browser-engine/iges/build.py
       - .github/workflows/iges-build.yml
   workflow_dispatch:
 jobs:

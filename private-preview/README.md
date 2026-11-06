@@ -67,7 +67,8 @@ subsequent requests. Do not share the credentials with people who should not
 access the application.
 
 CAD geometry stays in the browser. Initial WASM download is approximately 22 MiB.
-STEP is supported; IGES and nonuniform transforms remain browser-build limits.
+STEP and IGES are supported. IGES lazily loads an additional ~11 MiB converter
+which terminates after use; nonuniform transforms remain unsupported.
 Physical iPad/Pencil and Windows acceptance remains tracked separately.
 
 ## Tests and validation

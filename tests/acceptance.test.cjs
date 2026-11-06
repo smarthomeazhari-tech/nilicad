@@ -4,7 +4,8 @@ const fs=require('node:fs');
 const path=require('node:path');
 const {chromium,webkit}=require('playwright');
 const {startPrivateServer}=require('./support/private-server.cjs');
-let kernel;
+let kernel,iges;
+async function igesConverter(){if(!iges)iges=await (await import('../browser-engine/iges-converter.mjs')).initializeIGES(require('node:zlib').gunzipSync(fs.readFileSync(path.join(__dirname,'../browser-engine/iges/vendor/nilicad_iges.wasm.gz'))));return iges}
 before(async()=>{const oc=await require('replicad-opencascadejs')({wasmBinary:fs.readFileSync(require.resolve('replicad-opencascadejs/wasm'))});kernel=(await import('../browser-engine/kernel.mjs')).createKernel(oc)});
 const close=(a,b,tolerance=.001)=>assert.ok(Math.abs(a-b)<tolerance,`${a} != ${b}`);
 const volume=o=>o.dims.x*o.dims.y*o.dims.z;
@@ -44,15 +45,26 @@ for(const [name,engine] of Object.entries({chromium,webkit}))test(name+' shippin
   close((await kernel.handle('/evaluate',{op:'intersect',left:project.objects[0].exactRecipe,right:project.objects[1].exactRecipe})).volume,0);
   await page.locator('#ncUndo').click();assert.equal((await save()).objects.length,0);await page.locator('#ncRedo').click();assert.equal((await save()).objects.length,2);
   await open(project);close((await save()).sketchRegions[0].area,shared);
-  await files();await page.locator('#ncExportSTEP').click();await page.locator('#stepSaveNow').waitFor({state:'visible'});
-  const stepEvent=page.waitForEvent('download');await page.locator('#stepSaveNow').click();const step=fs.readFileSync(await (await stepEvent).path());await page.locator('#stepSaveClose').click();
-  const imported=await kernel.handle('/import-cad/step',step.buffer.slice(step.byteOffset,step.byteOffset+step.byteLength));close(imported.volume,expected);
-  await page.locator('#ncCADFile').setInputFiles({name:'roundtrip.step',mimeType:'application/octet-stream',buffer:step});await page.waitForFunction(()=>document.getElementById('count').textContent==='3',{},{timeout:30000});
+  for(const ext of ['STEP','IGES']){
+   await open(project);await files();await page.locator('#ncExport'+ext).click();await page.locator('#stepSaveNow').waitFor({state:'visible'});
+   const event=page.waitForEvent('download');await page.locator('#stepSaveNow').click();const downloaded=await event,data=fs.readFileSync(await downloaded.path());assert.ok(downloaded.suggestedFilename().endsWith('.'+ext.toLowerCase()));await page.locator('#stepSaveClose').click();
+   const step=ext==='IGES'?(await igesConverter()).convert(data,false):data.buffer.slice(data.byteOffset,data.byteOffset+data.byteLength);
+   const imported=await kernel.handle('/import-cad/step',step);close(imported.volume,expected);
+   await page.locator('#ncCADFile').setInputFiles({name:'roundtrip.'+ext.toLowerCase(),mimeType:'application/octet-stream',buffer:data});await page.waitForFunction(()=>document.getElementById('count').textContent==='3',{},{timeout:30000});
+   for(let i=0;i<50&&page.workers().some(w=>w.url().includes('iges-worker'));i++)await page.waitForTimeout(50);
+   assert.equal(page.workers().some(w=>w.url().includes('iges-worker')),false,'The optional converter must release its Worker after each operation');
+  }
   for(const ext of ['STL','OBJ','3MF']){
    await open(project);await files();const event=page.waitForEvent('download');await page.locator('#ncExport'+ext).click();const data=fs.readFileSync(await (await event).path());assert.ok(data.length>100);
    await page.locator('#ncMeshFile').setInputFiles({name:'roundtrip.'+ext.toLowerCase(),mimeType:'application/octet-stream',buffer:data});await page.waitForFunction(()=>Number(document.getElementById('count').textContent)>2,{},{timeout:30000});
    const result=await save();assert.equal(result.objects.filter(o=>o.exactRecipe).length,2);assert.ok(result.objects.slice(2).every(o=>o.geometryJSON&&!o.exactRecipe));
   }
+  // Incomplete converter assets must preserve the document and permit a clean retry.
+  await open(project);const beforeAssetFailure=await save();
+  await context.route('**/iges-*.wasm',route=>route.fulfill({status:200,contentType:'application/wasm',body:Buffer.from('incomplete')}));
+  await page.locator('#ncExportIGES').click();await page.waitForFunction(()=>document.getElementById('ncStatus').textContent.includes('خطای IGES'),{},{timeout:30000});
+  assert.equal(await page.locator('#stepSavePanel').isVisible(),false);assert.deepEqual((await save()).objects,beforeAssetFailure.objects);
+  await context.unroute('**/iges-*.wasm');await page.locator('#ncExportIGES').click();await page.locator('#stepSaveNow').waitFor({state:'visible'});await page.locator('#stepSaveClose').click();
   // Build overlapping solids entirely through visible drawing controls.
   await blank();await page.locator('[data-nctool="rectangle"]').click();await drag([330,350],[520,500]);await extrude(10,1);
   await page.locator('#ncSketch').click();await page.locator('[data-nctool="rectangle"]').click();await drag([620,430],[440,600]);await extrude(10,2);

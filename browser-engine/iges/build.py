@@ -37,6 +37,9 @@ def main():
             manifest["files"][name] = {"size": len(data), "sha256": hashlib.sha256(data).hexdigest()}
             (DEST / (name + ".gz")).write_bytes(gzip.compress(data, mtime=0))
         (DEST / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
+        for name in ("nilicad_iges.build-manifest.json", "nilicad_iges.provenance.json"):
+            if (work / name).exists():
+                shutil.copyfile(work / name, DEST / name)
         print(json.dumps(manifest, indent=2))
 
 

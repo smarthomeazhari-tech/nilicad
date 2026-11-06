@@ -98,7 +98,7 @@ for(const [name,engine] of Object.entries({chromium,webkit}))test(name+' CAD geo
  await page.evaluate(()=>testEval(`snapshot();ncClearRegions();`));await page.evaluate(()=>testEval(`document.getElementById('undoBtn').click()`));assert.equal(await page.evaluate(()=>testEval('ncRegions.length')),2);
  await page.evaluate(()=>testEval(`document.getElementById('redoBtn').click()`));assert.equal(await page.evaluate(()=>testEval('ncRegions.length')),0);
  // Real browser CAD downloads and imports preserve exact volume.
- for(const [button,extension] of [['ncExportSTEP','step']]){
+ for(const [button,extension] of [['ncExportSTEP','step'],['ncExportIGES','iges']]){
   await page.locator('#'+button).click();await page.locator('#stepSaveNow').waitFor({state:'visible'});const event=page.waitForEvent('download');await page.locator('#stepSaveNow').click();const file=await event;assert.ok(file.suggestedFilename().endsWith('.'+extension));
   const data=fs.readFileSync(await file.path());assert.ok(data.length>500);await page.locator('#stepSaveClose').click();
   const n=await page.evaluate(()=>testEval('items.length'));await page.locator('#ncCADFile').setInputFiles({name:'roundtrip.'+extension,mimeType:'application/octet-stream',buffer:data});await page.waitForFunction(n=>testEval('items.length')===n+1,n);
@@ -141,7 +141,7 @@ for(const [name,engine] of Object.entries({chromium,webkit}))test(name+' CAD geo
  await page.mouse.move(stroke[0].x,stroke[0].y);await page.mouse.down();await page.mouse.move(stroke[1].x,stroke[1].y,{steps:5});await page.mouse.up();
  assert.equal(await page.evaluate(()=>testEval('skClosed')),true,'Drawing must resume after cancellation');
  fs.mkdirSync(path.join(root,'test-results'),{recursive:true});await page.screenshot({path:path.join(root,'test-results',name+'.png')});
- assert.equal(await page.locator('#ncExportIGES').isDisabled(),true);
+ assert.equal(await page.locator('#ncExportIGES').isDisabled(),false);
  assert.deepEqual(remoteAPI,[],'No geometry request may leave the browser');
  assert.deepEqual(errors,[]);
  }finally{await browser?.close();server.closeAllConnections();await new Promise(r=>server.close(r))}
