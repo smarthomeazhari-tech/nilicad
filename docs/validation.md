@@ -13,7 +13,7 @@ npx playwright install --with-deps chromium webkit
 npm test
 ```
 
-The 22 test groups cover exact primitives and Booleans (including empty
+The 25 test groups cover exact primitives and Booleans (including empty
 intersections), independent overlapping/nested regions, circular holes, signed
 multiple extrusion, old Python B-Rep compatibility and asymmetric STEP round
 trips. Browser tests exercise selection, actual drawing, pull drag/cancel,
@@ -44,7 +44,7 @@ To reproduce on Windows after `npm ci`:
 ```sh
 npx playwright install chromium
 npm run build:private
-node --test tests/browser-kernel.test.cjs tests/private-auth.test.cjs
+node --test --test-concurrency=1 tests/browser-kernel.test.cjs tests/private-auth.test.cjs tests/iges.test.cjs
 node --test --test-concurrency=1 --test-name-pattern=chromium tests/ui.test.cjs tests/private-auth-ui.test.cjs tests/project-draft.test.cjs tests/acceptance.test.cjs
 ```
 
@@ -57,15 +57,15 @@ The existing `nilicad-occt-server` review branches remain available. In that
 repository run `pip install -r requirements-dev.txt` then
 `python -m unittest discover -s tests -v`. Eight test groups cover exact splitting,
 holes, signed extrusion, all Booleans, STEP/IGES round trips, malformed requests
-and ranged downloads. These server results do not imply browser IGES support.
+and ranged downloads. Browser IGES is independently verified by the optional converter tests.
 
 ## Physical acceptance and limits
 
 The owner confirmed private login and the repaired viewport on their iPad
 Safari. Pencil gestures, modeling, Files downloads and interoperable STEP still
 need physical-device confirmation in GitHub issue #6. Linux WebKit is not a
-physical Safari test. IGES is unavailable in the current serverless package
-(issue #13); STEP is the supported exact interchange format. Nonuniform
+physical Safari test. STEP and IGES are supported exact interchange formats; the isolated IGES
+converter is built and tested separately (issue #13). Nonuniform
 scale/shear are rejected. Imported mesh files do not gain analytic CAD history.
 
 See [DEPLOYMENT.md](../DEPLOYMENT.md) for the current Worker build branch,
@@ -77,7 +77,7 @@ prove a particular Cloudflare deployment has received the latest commit.
 `tests/acceptance.test.cjs` serves the actual protected distribution, without
 injecting testEval or invoking private application functions. Both browsers draw
 overlapping profiles with pointer input, select regions by touch, extrude in the
-negative direction, use visible Undo/Redo, save/open JSON, export/import STEP,
+negative direction, use visible Undo/Redo, save/open JSON, export/import STEP/IGES,
 and round-trip STL/OBJ/3MF. They then draw overlapping solids and run each Boolean
 through visible controls. Saved output is independently checked with OCCT and
 rectangle/box area-volume formulas. This caught missing visible history controls
@@ -100,3 +100,15 @@ and invalid CAD files are also opened through the shipping file inputs. They
 must leave all prior objects and modeling history unchanged. Mesh import stages
 and validates every body before one atomic commit, rejects empty/zero-area
 triangle sets and invalid indices, and limits input files to 20 MB.
+
+## Optional IGES validation
+
+Three converter test groups check asymmetric bounds/units, holes, signed and
+multiple bodies, an independently generated Python OCCT IGES fixture, malformed
+and oversized files, and successful conversion after a failure. Browser tests
+export/import IGES through the real dialog and file input, check exact volume,
+verify the optional Worker terminates, corrupt its downloaded assets to verify
+safe failure, and retry successfully. IGES requests send no CAD data to a server.
+The tested models use a 32 MiB converter WASM heap; that is not a total browser
+memory measurement. Physical iPad IGES interoperability is not claimed by Linux
+WebKit or Windows automation.

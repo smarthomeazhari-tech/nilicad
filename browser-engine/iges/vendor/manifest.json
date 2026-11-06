@@ -1,0 +1,21 @@
+{
+  "image": "ghcr.io/taucad/opencascade.js@sha256:deb9be8470038652c060b47f2d2e7e2e46d899bb896ecabb007bf60307ee2d54",
+  "files": {
+    "nilicad_iges.js": {
+      "size": 52065,
+      "sha256": "70bdf8ff971820bc118415003493237194c02ae852f17f59ed9e8cedf82de230"
+    },
+    "nilicad_iges.wasm": {
+      "size": 11563945,
+      "sha256": "ee8a57628686dc02e9b95045ebe22c5c05b79ea6e2ea448bef412b5c31cbedba"
+    },
+    "nilicad_iges.d.ts": {
+      "size": 25229,
+      "sha256": "9a014628e282a35c239ec43d84376577e614c5ddfd915a2cd09a67accc759605"
+    }
+  },
+  "source": {
+    "converter.cpp": "dfa86fb2765dd007ee60d67962659a4230ccfcc37adc9ff95bebfa1793726f58",
+    "custom-build.yml": "265d48450a7ddb8db218be5b8f3a4c7bc1ce03758c4763bee67fd73d1b87da9f"
+  }
+}

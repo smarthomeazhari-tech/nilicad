@@ -691,7 +691,7 @@ function cadServerProfiles(){
  catch{return {mode:'browser',local:'http://127.0.0.1:8765',cloud:''}}
 }
 function cadBrowserMode(){return cadServerProfiles().mode==='browser'}
-function cadUpdateEngineUI(){const button=document.getElementById('ncExportIGES');button.disabled=cadBrowserMode();button.title=cadBrowserMode()?'موتور مرورگر برای تبادل CAD از STEP پشتیبانی می‌کند':''}
+function cadUpdateEngineUI(){const button=document.getElementById('ncExportIGES');button.disabled=false;button.title=cadBrowserMode()?'مبدل اختیاری IGES هنگام استفاده حدود ۱۱ مگابایت دریافت می‌کند و سپس بسته می‌شود':''}
 function cadSelectedUrl(){
  const p=cadServerProfiles();
  return (p.mode==='browser'?'':p.mode==='cloud'?p.cloud:p.local).trim().replace(/\/+$/,'');
@@ -1533,7 +1533,7 @@ function ncSolidGeometry(shape,depth){
 }
 let ncPreviewEpoch=0;
 async function ncPullPreview(){
- if(nc.mode!=='pull')return;
+ if(nc.mode!=='pull'||ncBusy)return;
  const epoch=++ncPreviewEpoch;ncDraw();const depth=Number(ncDepth.value);
  if(!Number.isFinite(depth)||Math.abs(depth)<.01||Math.abs(depth)>10000)return;
  try{
@@ -1849,7 +1849,7 @@ canvas.addEventListener('webglcontextrestored',()=>{resize();ncGraphicsStatus.hi
  <div style="background:#1e293b;color:white;border:1px solid #64748b;border-radius:16px;padding:20px;width:min(440px,92vw);box-shadow:0 12px 45px #0009">
   <h3 style="margin:0 0 12px">انتخاب موتور CAD</h3>
   <label style="display:block;margin:8px 0"><input type="radio" name="cadServerMode" value="browser"> داخل مرورگر — بدون سرور</label>
-  <p style="font-size:12px;line-height:1.7">موتور دقیق Open CASCADE روی دستگاه اجرا می‌شود. در اولین استفاده حدود ۲۲ مگابایت دریافت می‌شود. تبادل فایل CAD در این حالت با STEP انجام می‌شود.</p>
+  <p style="font-size:12px;line-height:1.7">موتور دقیق Open CASCADE روی دستگاه اجرا می‌شود. در اولین استفاده حدود ۲۲ مگابایت دریافت می‌شود. تبادل فایل CAD با STEP و IGES انجام می‌شود. مبدل IGES هنگام استفاده حدود ۱۱ مگابایت اضافه دریافت می‌کند.</p>
   <label style="display:block;margin:8px 0"><input type="radio" name="cadServerMode" value="local"> کامپیوتر ویندوز / شبکه داخلی</label>
   <label style="display:block;margin:8px 0"><input type="radio" name="cadServerMode" value="cloud"> سرور اینترنتی</label>
   <label style="display:block;margin-top:12px">آدرس موتور ویندوز</label>
