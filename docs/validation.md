@@ -21,6 +21,9 @@ interrupted pen events, private authenticated rendering, JSON save/open,
 unfinished sketches, undo/redo, invalid-file preservation, and STL/OBJ/3MF.
 Geometry requests must stay inside the browser. Private UI startup is tested
 with a tablet viewport; blocked app downloads must show an error.
+The protected Chromium scenario deliberately loses and restores its WebGL
+context, checks the visible recovery status and unchanged document, then reads
+rendered pixels again. A graphics-driver reset must not discard the project.
 
 ## Windows Chromium
 
