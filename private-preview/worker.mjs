@@ -16,7 +16,10 @@ export default {
  async fetch(request,env){
   if(new URL(request.url).protocol!=='https:')return response('HTTPS is required.',403);
   // A deployment without configured secrets must not serve the application.
-  if(typeof env.AUTH_USERNAME!=='string'||!env.AUTH_USERNAME||env.AUTH_USERNAME.includes(':')||typeof env.AUTH_PASSWORD!=='string'||env.AUTH_PASSWORD.length<16||!env.LOGIN_LIMITER?.limit||!env.ASSETS?.fetch)return response('ورود خصوصی هنوز توسط مالک سایت تنظیم نشده است.',503);
+  if(typeof env.AUTH_USERNAME!=='string'||!env.AUTH_USERNAME||env.AUTH_USERNAME.includes(':'))return response('ورود خصوصی تنظیم نشده: AUTH_USERNAME را در Runtime variables and secrets بخش Production تنظیم کنید.',503);
+  if(typeof env.AUTH_PASSWORD!=='string'||env.AUTH_PASSWORD.length<16)return response('ورود خصوصی تنظیم نشده: AUTH_PASSWORD را با حداقل ۱۶ کاراکتر در Runtime variables and secrets بخش Production تنظیم کنید.',503);
+  if(!env.LOGIN_LIMITER?.limit)return response('پیکربندی میزبان ناقص است: اتصال LOGIN_LIMITER موجود نیست.',503);
+  if(!env.ASSETS?.fetch)return response('پیکربندی میزبان ناقص است: اتصال ASSETS موجود نیست.',503);
   const supplied=credentials(request.headers.get('Authorization'));
   const [userOK,passwordOK]=await Promise.all([equal(supplied?.username||'',env.AUTH_USERNAME),equal(supplied?.password||'',env.AUTH_PASSWORD)]);
   if(!supplied||!userOK||!passwordOK){

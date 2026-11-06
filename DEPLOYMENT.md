@@ -4,6 +4,10 @@ Owner's permanent site: <https://nilicad.smart-home-azhari.workers.dev>.
 Login secrets belong in **Runtime variables and secrets > Production**, not
 the similarly named variables section inside Build settings. Both
 `AUTH_USERNAME` and `AUTH_PASSWORD` must be present at runtime.
+The Wrangler configuration preserves dashboard runtime variables with
+`keep_vars: true`; use the Secret type for credentials. If a deployed Worker
+returns 503, its message identifies the missing runtime setting or binding
+without disclosing any value. A successful build does not prove login readiness.
 
 For the Cloudflare Worker named `nilicad`, use the following Git build settings:
 
