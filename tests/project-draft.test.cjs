@@ -12,7 +12,7 @@ for(const [name,engine] of Object.entries({chromium,webkit}))test(name+' saves, 
   if(!file.startsWith(root+path.sep)){res.writeHead(404);res.end();return}
   try{
    let data=fs.readFileSync(file);
-   if(file.endsWith('/index.html'))data=Buffer.from(data.toString()
+   if(path.basename(file)==='index.html')data=Buffer.from(data.toString()
     .replace('https://cdn.jsdelivr.net/npm/three@0.164.1/build/three.module.js','/node_modules/three/build/three.module.js')
     .replace('https://cdn.jsdelivr.net/npm/three@0.164.1/examples/jsm/','/node_modules/three/examples/jsm/')
     .replace('\n</script>\n<input type="file" id="ncCADFile"','\nwindow.testEval=code=>eval(code);\n</script>\n<input type="file" id="ncCADFile"'));
