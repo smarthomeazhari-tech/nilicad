@@ -48,6 +48,10 @@ CI installs no Python backend and starts no Uvicorn service.
 Physical iPad Safari/Pencil and Windows acceptance still require actual devices;
 Linux WebKit is not a substitute for those checks. See issue #6.
 
+The input regression also interrupts pen strokes with `pointercancel` and
+`lostpointercapture`, verifies that transient lines are removed without changing
+the document, and draws a new closed profile after each interrupted input.
+
 ## Distribution
 
 The generated distribution retains the upstream LGPL-2.1 and MIT license files,

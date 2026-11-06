@@ -1747,7 +1747,14 @@ canvas.addEventListener('pointerup',e=>{
 canvas.addEventListener('pointerdown',ncPenDown,true);
 canvas.addEventListener('pointermove',ncPenMove,true);
 canvas.addEventListener('pointerup',ncPenUp,true);
-canvas.addEventListener('pointercancel',e=>{if(ncPen.active?.id===e.pointerId)ncPen.active=null},true);
+function ncCancelPen(e){
+ if(ncPen.active?.id!==e.pointerId)return;
+ ncPen.active=null;ncTapDown=null;
+ if(ncStrokePreview){nc.group.remove(ncStrokePreview);ncStrokePreview.geometry.dispose();ncStrokePreview.material.dispose();ncStrokePreview=null}
+ if(canvas.hasPointerCapture(e.pointerId))canvas.releasePointerCapture(e.pointerId);
+}
+canvas.addEventListener('pointercancel',ncCancelPen,true);
+canvas.addEventListener('lostpointercapture',ncCancelPen,true);
 // Touch taps select; moved or multiple touches remain camera gestures.
 const ncTouches=new Map();let ncMultiTouch=false;
 canvas.addEventListener('pointerdown',e=>{if(e.pointerType!=='touch')return;if(!ncTouches.size)ncMultiTouch=false;ncTouches.set(e.pointerId,{x:e.clientX,y:e.clientY});if(ncTouches.size>1)ncMultiTouch=true},true);

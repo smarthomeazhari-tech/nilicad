@@ -96,6 +96,20 @@ for(const [name,engine] of Object.entries({chromium,webkit}))test(name+' CAD geo
  await page.mouse.move(stroke[0].x,stroke[0].y);await page.mouse.down();await page.mouse.move(stroke[1].x,stroke[1].y,{steps:5});await page.mouse.up();assert.equal(await page.evaluate(()=>testEval('skClosed')),true);const drawnArea=await page.evaluate(()=>testEval(`Math.abs((skPoints[2].x-skPoints[0].x)*(skPoints[2].y-skPoints[0].y))`));assert.ok(Math.abs(drawnArea-200)<10);
  await page.locator('#ncExtrude').click();await page.locator('#ncPull').waitFor({state:'visible'});await page.locator('#ncDepth').fill('5');await page.locator('#ncConfirm').click();await page.waitForFunction(()=>testEval('items.length===1&&!ncBusy'));
  const drawnVolume=await page.evaluate(()=>testEval(`(async()=>(await (await ncRequest('/evaluate',makeExactNode(items[0]))).json()).volume)()`));assert.ok(Math.abs(drawnVolume-drawnArea*5)<.0001);
+ // Interrupted Pencil events must discard their transient line and preserve the document.
+ await page.evaluate(()=>testEval(`items.forEach(o=>world.remove(o.mesh));items=[];ncClearRegions();ncSketchReset();ncSetTool('rectangle');`));
+ for(const eventName of ['pointercancel','lostpointercapture']){
+  const before=await page.evaluate(()=>testEval('JSON.stringify(ncProjectData())'));
+  await page.locator('#view').dispatchEvent('pointerdown',{pointerId:71,pointerType:'pen',button:0,buttons:1,clientX:stroke[0].x,clientY:stroke[0].y});
+  await page.locator('#view').dispatchEvent('pointermove',{pointerId:71,pointerType:'pen',button:0,buttons:1,clientX:stroke[1].x,clientY:stroke[1].y});
+  assert.equal(await page.evaluate(()=>testEval('!!ncStrokePreview')),true);
+  await page.locator('#view').dispatchEvent(eventName,{pointerId:71,pointerType:'pen'});
+  assert.equal(await page.evaluate(()=>testEval('ncPen.active')),null);
+  assert.equal(await page.evaluate(()=>testEval('ncStrokePreview===null')),true);
+  assert.equal(await page.evaluate(()=>testEval('JSON.stringify(ncProjectData())')),before);
+ }
+ await page.mouse.move(stroke[0].x,stroke[0].y);await page.mouse.down();await page.mouse.move(stroke[1].x,stroke[1].y,{steps:5});await page.mouse.up();
+ assert.equal(await page.evaluate(()=>testEval('skClosed')),true,'Drawing must resume after cancellation');
  fs.mkdirSync(path.join(root,'test-results'),{recursive:true});await page.screenshot({path:path.join(root,'test-results',name+'.png')});
  assert.equal(await page.locator('#ncExportIGES').isDisabled(),true);
  assert.deepEqual(remoteAPI,[],'No geometry request may leave the browser');
