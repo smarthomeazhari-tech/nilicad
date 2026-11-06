@@ -1618,7 +1618,7 @@ function ncLoadProject(data,record=true){
   if(!Array.isArray(data.sketchRegions||[])||(data.sketchRegions||[]).length>1000)throw Error('فهرست نواحی معتبر نیست');
   for(const r of data.sketchRegions||[])regions.push(ncBuildRegion(r));
  }catch(err){created.forEach(o=>{o.mesh.geometry.dispose();o.mesh.material.dispose()});regions.forEach(r=>{r.mesh.geometry.dispose();r.mesh.material.dispose()});throw err}
- if(record)snapshot();gizmo.detach();items.forEach(o=>{world.remove(o.mesh);o.mesh.geometry.dispose();o.mesh.material.dispose()});items=created;
+ if(record)snapshot();cancelBoolean();gizmo.detach();items.forEach(o=>{world.remove(o.mesh);o.mesh.geometry.dispose();o.mesh.material.dispose()});items=created;
  ncClearRegions();ncClearVisual();skSegments=[];skPoints=[];skCircle=null;skClosed=false;skArcPoints=[];nc.rectStart=null;skPull=false;
  items.forEach(o=>world.add(o.mesh));regions.forEach(r=>{ncRegions.push(r);ncRegionLayer.add(r.mesh)});nextId=items.length+1;
  ncSetSketchState(false);ncPull.style.display='none';document.getElementById('ncConfirm').style.display='none';document.getElementById('ncExtrude').disabled=true;select(null);refreshList();
@@ -1661,7 +1661,39 @@ ncById('ncExport3MF').onclick=async()=>{
  }catch(err){ncMessage('خطای 3MF: '+err.message)}
 };
 ncById('ncImportMesh').onclick=()=>ncById('ncMeshFile').click();
-ncById('ncMeshFile').onchange=async e=>{const file=e.target.files?.[0];if(!file)return;try{const ext=file.name.split('.').pop().toLowerCase();let imported=[];if(ext==='stl'){const {STLLoader}=await import('three/addons/loaders/STLLoader.js');imported=[new STLLoader().parse(await file.arrayBuffer())]}else if(ext==='obj'){const {OBJLoader}=await import('three/addons/loaders/OBJLoader.js');const root=new OBJLoader().parse(await file.text());root.updateMatrixWorld(true);root.traverse(o=>{if(o.isMesh){const g=o.geometry.clone();g.applyMatrix4(o.matrixWorld);imported.push(g)}})}else if(ext==='3mf'){const {ThreeMFLoader}=await import('three/addons/loaders/3MFLoader.js');const root=new ThreeMFLoader().parse(await file.arrayBuffer());root.rotation.x=-Math.PI/2;root.updateMatrixWorld(true);root.traverse(o=>{if(o.isMesh){const g=o.geometry.clone();g.applyMatrix4(o.matrixWorld);imported.push(g)}})}else throw Error('پسوند پشتیبانی نمی‌شود');if(!imported.length)throw Error('هیچ Mesh در فایل پیدا نشد');snapshot();for(const geo of imported){geo.computeBoundingBox();const box=geo.boundingBox,center=box.getCenter(new THREE.Vector3()),size=box.getSize(new THREE.Vector3());geo.translate(-center.x,-center.y,-center.z);const id=nextId++;const mesh=new THREE.Mesh(geo,mat.clone());mesh.position.copy(center);mesh.userData.objectId=id;world.add(mesh);items.push({id,name:file.name+' '+id,type:'booleanMesh',dims:{x:Math.max(.001,size.x),y:Math.max(.001,size.z),z:Math.max(.001,size.y)},mesh,exactRecipe:null})}select(items.at(-1));refreshList();ncMessage(imported.length+' مش وارد شد')}catch(err){alert('خطای ورود فایل: '+err.message)}finally{e.target.value=''}};
+function ncValidateImportMesh(geo){
+ const p=geo.attributes.position,index=geo.index,count=index?index.count:p?.count;
+ if(!p||p.itemSize!==3||!p.count||!Number.isInteger(p.count)||!count||count%3)throw Error('فایل مش هیچ مثلث معتبری ندارد');
+ for(let i=0;i<p.array.length;i++)if(!Number.isFinite(p.array[i]))throw Error('مختصات فایل مش معتبر نیست');
+ if(index)for(let i=0;i<index.count;i++){const n=index.getX(i);if(!Number.isInteger(n)||n<0||n>=p.count)throw Error('اندیس مثلث معتبر نیست')}
+ const a=new THREE.Vector3(),b=new THREE.Vector3(),c=new THREE.Vector3();let hasArea=false;
+ for(let i=0;i<count;i+=3){a.fromBufferAttribute(p,index?index.getX(i):i);b.fromBufferAttribute(p,index?index.getX(i+1):i+1);c.fromBufferAttribute(p,index?index.getX(i+2):i+2);if(b.sub(a).cross(c.sub(a)).lengthSq()>1e-24){hasArea=true;break}}
+ if(!hasArea)throw Error('مثلث‌های فایل مش مساحت ندارند');
+ geo.computeVertexNormals();geo.computeBoundingBox();
+}
+ncById('ncMeshFile').onchange=async e=>{
+ const file=e.target.files?.[0];if(!file)return;if(ncBusy){e.target.value='';return}
+ let imported=[],prepared=[];ncBusy=true;
+ try{
+  if(file.size>20000000)throw Error('حداکثر حجم فایل ۲۰ مگابایت است');
+  const ext=file.name.split('.').pop().toLowerCase();
+  if(ext==='stl'){const {STLLoader}=await import('three/addons/loaders/STLLoader.js');imported=[new STLLoader().parse(await file.arrayBuffer())]}
+  else if(ext==='obj'){const {OBJLoader}=await import('three/addons/loaders/OBJLoader.js');const root=new OBJLoader().parse(await file.text());root.updateMatrixWorld(true);root.traverse(o=>{if(o.isMesh){const g=o.geometry.clone();g.applyMatrix4(o.matrixWorld);imported.push(g)}})}
+  else if(ext==='3mf'){const {ThreeMFLoader}=await import('three/addons/loaders/3MFLoader.js');const root=new ThreeMFLoader().parse(await file.arrayBuffer());root.rotation.x=-Math.PI/2;root.updateMatrixWorld(true);root.traverse(o=>{if(o.isMesh){const g=o.geometry.clone();g.applyMatrix4(o.matrixWorld);imported.push(g)}})}
+  else throw Error('پسوند پشتیبانی نمی‌شود');
+  if(!imported.length)throw Error('هیچ Mesh در فایل پیدا نشد');
+  // Validate and prepare every body before committing any of them to the document.
+  for(const geo of imported){
+   ncValidateImportMesh(geo);const center=geo.boundingBox.getCenter(new THREE.Vector3()),size=geo.boundingBox.getSize(new THREE.Vector3());geo.translate(-center.x,-center.y,-center.z);
+   const id=nextId+prepared.length,mesh=new THREE.Mesh(geo,mat.clone());mesh.position.copy(center);mesh.userData.objectId=id;
+   prepared.push({id,name:file.name+' '+id,type:'booleanMesh',dims:{x:Math.max(.001,size.x),y:Math.max(.001,size.z),z:Math.max(.001,size.y)},mesh,exactRecipe:null});
+  }
+  cancelBoolean();snapshot();nextId+=prepared.length;
+  for(const object of prepared){world.add(object.mesh);items.push(object)}
+  const count=prepared.length;imported=[];prepared=[];select(items.at(-1));refreshList();ncMessage(count+' مش وارد شد');
+ }catch(err){for(const object of prepared)object.mesh.material.dispose();for(const geo of imported)geo.dispose();ncMessage('خطای ورود فایل: '+err.message)}
+ finally{ncBusy=false;e.target.value=''}
+};
 
 // v3.1 Pencil-first input routing. Pen strokes never reach OrbitControls.
 // Touch pointers remain available to OrbitControls for one-finger orbit and two-finger pan/zoom.
