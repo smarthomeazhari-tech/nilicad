@@ -86,3 +86,11 @@ and inconsistent sketch mode after new-project/load/extrusion.
 Creating a new project cancels pending Boolean/move/draft state. Test files run
 sequentially to avoid competing WebGL contexts, with explicit browser-test and
 CI time limits. Screenshots include shipping-browser success/failure artifacts.
+
+The shipping scenario also switches from Rectangle to Circle and draws a hole
+inside that closed rectangle, checking `(rectangle area - pi*r^2)*depth`. It
+draws a three-point arc with connected lines and checks extrusion against the
+analytic circular-segment area. Chromium generates native pen-type pointer
+events through CDP; an event observer verifies that pen input reached the page.
+WebKit runs the same drawing/file workflow with mouse and touch input. Neither
+case substitutes for a physical Apple Pencil test.

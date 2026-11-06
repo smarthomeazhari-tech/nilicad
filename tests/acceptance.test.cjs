@@ -25,7 +25,9 @@ for(const [name,engine] of Object.entries({chromium,webkit}))test(name+' shippin
   const save=async()=>{await files();const event=page.waitForEvent('download');await page.locator('#ncSave').click();const download=await event;return JSON.parse(fs.readFileSync(await download.path(),'utf8'))};
   const open=async project=>{await page.locator('#fileInput').setInputFiles({name:'acceptance.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(project))});await page.waitForFunction(()=>document.getElementById('fileInput').value==='');};
   const blank=async()=>{await page.locator('#ncHome').click();await page.waitForFunction(()=>document.getElementById('count').textContent==='0');await page.locator('#ncTopView').click();assert.equal(await page.locator('#ncUndo').isDisabled(),true);await page.locator('#ncSketch').click();await page.locator('[data-nctool="rectangle"]').waitFor({state:'visible'})};
-  const drag=async(a,b)=>{await page.mouse.move(...a);await page.mouse.down();await page.mouse.move(...b,{steps:8});await page.mouse.up()};
+  const pen=name==='chromium'?await context.newCDPSession(page):null;
+  if(pen)await page.evaluate(()=>{window.observedPenDowns=0;document.addEventListener('pointerdown',e=>{if(e.pointerType==='pen')window.observedPenDowns++},true)});
+  const drag=async(a,b)=>{if(!pen){await page.mouse.move(...a);await page.mouse.down();await page.mouse.move(...b,{steps:8});await page.mouse.up();return}await pen.send('Input.dispatchMouseEvent',{type:'mouseMoved',x:a[0],y:a[1],pointerType:'pen'});await pen.send('Input.dispatchMouseEvent',{type:'mousePressed',x:a[0],y:a[1],button:'left',buttons:1,clickCount:1,pointerType:'pen',force:.5});for(let i=1;i<=8;i++)await pen.send('Input.dispatchMouseEvent',{type:'mouseMoved',x:a[0]+(b[0]-a[0])*i/8,y:a[1]+(b[1]-a[1])*i/8,buttons:1,pointerType:'pen',force:.5});await pen.send('Input.dispatchMouseEvent',{type:'mouseReleased',x:b[0],y:b[1],button:'left',buttons:0,clickCount:1,pointerType:'pen'})};
   const extrude=async(depth,count)=>{await page.locator('#ncExtrude').click();await page.locator('#ncDepth').waitFor({state:'visible'});await page.locator('#ncDepth').fill(String(depth));await page.locator('#ncConfirm').click();await page.waitForFunction(n=>document.getElementById('count').textContent===String(n)&&document.getElementById('ncConfirm').style.display==='none',count,{timeout:30000})};
   // Draw two actual overlapping profiles and verify independently split regions.
   await blank();await page.locator('[data-nctool="rectangle"]').click();await drag([330,350],[520,500]);await drag([620,430],[440,600]);
@@ -63,6 +65,23 @@ for(const [name,engine] of Object.entries({chromium,webkit}))test(name+' shippin
    await page.locator('#ncUndo').click();assert.equal((await save()).objects.length,2);await page.locator('#ncRedo').click();assert.equal((await save()).objects.length,1);
   }
   await page.locator('#ncItems').click();await page.locator('#objectList .treeitem').first().click();await page.locator('#ncItems').click();await page.locator('#ncUnion').click();await blank();assert.equal(await page.locator('#booleanBanner').isVisible(),false);
+  // Explicitly switch tools and draw a hole inside an existing closed rectangle.
+  await page.locator('[data-nctool="rectangle"]').click();await drag([330,350],[620,600]);
+  await page.locator('[data-nctool="circle"]').click();assert.equal(await page.locator('#ncExtrude').isDisabled(),true);await drag([470,470],[500,470]);
+  const holeProfiles=await save();assert.equal(holeProfiles.sketchRegions.length,2,'The inner circle must be drawn instead of selecting/extruding the outer face');
+  const outer=holeProfiles.sketchRegions.find(r=>!r.circle),circle=holeProfiles.sketchRegions.find(r=>r.circle).circle;
+  await page.locator('#ncSplit').click();await page.waitForFunction(()=>document.getElementById('ncStatus').textContent.includes('2 ناحیه'),{},{timeout:30000});
+  await page.touchscreen.tap(360,380);await extrude(5,1);
+  const plate=await save(),plateShape=await kernel.handle('/evaluate',plate.objects[0].exactRecipe);close(plateShape.volume,(area(rectBounds(outer))-Math.PI*circle.r*circle.r)*5);
+  // Three-point arc followed by lines must stay analytic through extrusion.
+  await blank();await page.locator('[data-nctool="arc"]').click();
+  for(const point of [[400,400],[450,350],[500,400]])await drag(point,point);
+  await page.locator('[data-nctool="line"]').click();await drag([500,400],[500,500]);await drag([500,500],[400,500]);await drag([400,500],[400,400]);
+  const arcProject=await save(),segments=arcProject.sketchRegions[0].segments;assert.ok(segments.some(s=>s.kind==='arc'));
+  let signedArea=0;
+  for(const seg of segments){signedArea+=(seg.a.x*seg.b.y-seg.b.x*seg.a.y)/2;if(seg.kind==='arc'){const {a,m,b}=seg,det=2*(a.x*(m.y-b.y)+m.x*(b.y-a.y)+b.x*(a.y-m.y)),aa=a.x*a.x+a.y*a.y,mm=m.x*m.x+m.y*m.y,bb=b.x*b.x+b.y*b.y,cx=(aa*(m.y-b.y)+mm*(b.y-a.y)+bb*(a.y-m.y))/det,cy=(aa*(b.x-m.x)+mm*(a.x-b.x)+bb*(m.x-a.x))/det,r2=(a.x-cx)**2+(a.y-cy)**2,angle=p=>Math.atan2(p.y-cy,p.x-cx),normalize=x=>(x+Math.PI*4)%(Math.PI*2);let theta=normalize(angle(b)-angle(a));if(normalize(angle(m)-angle(a))>theta)theta-=Math.PI*2;signedArea+=r2*(theta-Math.sin(theta))/2}}
+  await extrude(4,1);const arcSolid=(await save()).objects[0];close((await kernel.handle('/evaluate',arcSolid.exactRecipe)).volume,Math.abs(signedArea)*4);
+  if(pen){assert.ok(await page.evaluate(()=>window.observedPenDowns)>10,'Chromium must receive real pen-type input');await pen.detach()}
   fs.mkdirSync(path.resolve(__dirname,'../test-results'),{recursive:true});await page.screenshot({path:path.resolve(__dirname,'../test-results/shipping-'+name+'.png')});
   assert.deepEqual(errors,[]);assert.deepEqual(remote,[]);
  }catch(error){if(page){fs.mkdirSync(path.resolve(__dirname,'../test-results'),{recursive:true});await page.screenshot({path:path.resolve(__dirname,'../test-results/shipping-'+name+'-failure.png'),timeout:5000}).catch(()=>{})}throw error}
