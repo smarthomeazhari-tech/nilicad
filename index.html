@@ -1771,6 +1771,11 @@ controls.addEventListener('change',()=>{if(nc.mode==='pull')ncPositionPull()});
 // Disable legacy full-screen sketch dialog; start on the perspective workplane.
 skOpen=function(){ncSketchReset();nc.mode='sketch';ncSetTool('line')};
 skW.classList.remove('open');ncSketchReset();ncSetTool('line');cadUpdateEngineUI();
+// A GPU reset must preserve the document and permit Three.js to restore resources.
+const ncGraphicsStatus=document.createElement('div');ncGraphicsStatus.id='ncGraphicsStatus';ncGraphicsStatus.hidden=true;ncGraphicsStatus.setAttribute('role','status');
+ncGraphicsStatus.style.cssText='position:fixed;top:90px;left:20%;right:20%;z-index:99999;background:#fff3cd;color:#664d03;padding:12px;border-radius:10px;direction:rtl';document.body.appendChild(ncGraphicsStatus);
+canvas.addEventListener('webglcontextlost',event=>{event.preventDefault();if(ncPen.active)ncCancelPen({pointerId:ncPen.active.id});ncGraphicsStatus.hidden=false;ncGraphicsStatus.textContent='نمایشگر سه‌بعدی موقتاً قطع شده است؛ منتظر بازیابی بمانید. مدل شما در حافظه حفظ شده است.'});
+canvas.addEventListener('webglcontextrestored',()=>{resize();ncGraphicsStatus.hidden=true;ncMessage('نمایشگر سه‌بعدی بازیابی شد؛ مدل حفظ شده است')});
 
 </script>
 <input type="file" id="ncCADFile" accept=".step,.stp,.iges,.igs" hidden><input type="file" id="ncMeshFile" accept=".stl,.obj,.3mf" hidden><div id="ncTop"><button class="ncBtn" id="ncHome">⌂</button><span class="ncTitle">NiliCAD v4.2.0 · <span id="ncProject">Untitled Project</span></span><button class="ncBtn" id="ncMenu">•••</button></div>
