@@ -81,6 +81,17 @@ for(const [name,engine] of Object.entries({chromium,webkit}))test(name+' shippin
   let signedArea=0;
   for(const seg of segments){signedArea+=(seg.a.x*seg.b.y-seg.b.x*seg.a.y)/2;if(seg.kind==='arc'){const {a,m,b}=seg,det=2*(a.x*(m.y-b.y)+m.x*(b.y-a.y)+b.x*(a.y-m.y)),aa=a.x*a.x+a.y*a.y,mm=m.x*m.x+m.y*m.y,bb=b.x*b.x+b.y*b.y,cx=(aa*(m.y-b.y)+mm*(b.y-a.y)+bb*(a.y-m.y))/det,cy=(aa*(b.x-m.x)+mm*(a.x-b.x)+bb*(m.x-a.x))/det,r2=(a.x-cx)**2+(a.y-cy)**2,angle=p=>Math.atan2(p.y-cy,p.x-cx),normalize=x=>(x+Math.PI*4)%(Math.PI*2);let theta=normalize(angle(b)-angle(a));if(normalize(angle(m)-angle(a))>theta)theta-=Math.PI*2;signedArea+=r2*(theta-Math.sin(theta))/2}}
   await extrude(4,1);const arcSolid=(await save()).objects[0];close((await kernel.handle('/evaluate',arcSolid.exactRecipe)).volume,Math.abs(signedArea)*4);
+  // A malformed mesh must not add a broken body or partially commit a valid sibling.
+  const intact=await save();
+  const brokenOBJ='o valid\nv 0 0 0\nv 10 0 0\nv 0 10 0\nf 1 2 3\no invalid\nv NaN 0 0\nv 1 0 0\nv 0 1 0\nf 4 5 6\n';
+  for(const [ext,data] of [['stl','solid empty\n'+' '.repeat(200)+'\nendsolid empty'],['obj',brokenOBJ],['3mf','not a zip']]){
+   await page.locator('#ncMeshFile').setInputFiles({name:'invalid.'+ext,mimeType:'application/octet-stream',buffer:Buffer.from(data)});await page.waitForFunction(()=>document.getElementById('ncMeshFile').value==='');
+   assert.deepEqual((await save()).objects,intact.objects,'Invalid '+ext+' must preserve every original body');
+  }
+  for(const ext of ['step','iges']){
+   await page.locator('#ncCADFile').setInputFiles({name:'invalid.'+ext,mimeType:'application/octet-stream',buffer:Buffer.from('invalid CAD')});await page.waitForFunction(()=>document.getElementById('ncCADFile').value==='');assert.deepEqual((await save()).objects,intact.objects,'Invalid CAD must preserve the document');
+  }
+  await page.locator('#ncUndo').click();assert.equal((await save()).objects.length,0);await page.locator('#ncRedo').click();assert.equal((await save()).objects.length,1);
   if(pen){assert.ok(await page.evaluate(()=>window.observedPenDowns)>10,'Chromium must receive real pen-type input');await pen.detach()}
   fs.mkdirSync(path.resolve(__dirname,'../test-results'),{recursive:true});await page.screenshot({path:path.resolve(__dirname,'../test-results/shipping-'+name+'.png')});
   assert.deepEqual(errors,[]);assert.deepEqual(remote,[]);
