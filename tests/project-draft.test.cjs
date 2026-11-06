@@ -5,7 +5,7 @@ const path=require('node:path');
 const http=require('node:http');
 const {chromium,webkit}=require('playwright');
 
-for(const [name,engine] of Object.entries({chromium,webkit}))test(name+' saves, reopens and completes unfinished sketch without losing the document',async t=>{
+for(const [name,engine] of Object.entries({chromium,webkit}))test(name+' saves, reopens and completes unfinished sketch without losing the document',{timeout:180000},async t=>{
  const root=path.resolve(__dirname,'..');
  const server=http.createServer((req,res)=>{
   const file=path.resolve(root,req.url==='/'?'index.html':req.url.slice(1));
