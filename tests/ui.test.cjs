@@ -4,7 +4,7 @@ const {chromium,webkit}=require('playwright');
 const fs=require('node:fs');
 const path=require('node:path');
 const http=require('node:http');
-for(const [name,engine] of Object.entries({chromium,webkit}))test(name+' CAD geometry, interaction and file round trips',async t=>{
+for(const [name,engine] of Object.entries({chromium,webkit}))test(name+' CAD geometry, interaction and file round trips',{timeout:180000},async t=>{
  const root=path.resolve(__dirname,'..');
  const server=http.createServer((req,res)=>{
   let file=req.url==='/'?'index.html':req.url.slice(1);

@@ -13,7 +13,7 @@ npx playwright install --with-deps chromium webkit
 npm test
 ```
 
-The 20 test groups cover exact primitives and Booleans (including empty
+The 22 test groups cover exact primitives and Booleans (including empty
 intersections), independent overlapping/nested regions, circular holes, signed
 multiple extrusion, old Python B-Rep compatibility and asymmetric STEP round
 trips. Browser tests exercise selection, actual drawing, pull drag/cancel,
@@ -36,7 +36,7 @@ Undo restores them. Errors and cancelled calculations preserve their operands.
 
 The `windows` job in `.github/workflows/cad-ui.yml` runs on `windows-latest`,
 builds the private bundle on Windows, and runs geometry/authentication checks
-plus all three Chromium browser scenarios. Each browser test prints the OS and
+plus all four Chromium browser scenarios. Each browser test prints the OS and
 browser version; screenshots are uploaded as a separate Windows artifact.
 
 To reproduce on Windows after `npm ci`:
@@ -45,7 +45,7 @@ To reproduce on Windows after `npm ci`:
 npx playwright install chromium
 npm run build:private
 node --test tests/browser-kernel.test.cjs tests/private-auth.test.cjs
-node --test --test-concurrency=1 --test-name-pattern=chromium tests/ui.test.cjs tests/private-auth-ui.test.cjs tests/project-draft.test.cjs
+node --test --test-concurrency=1 --test-name-pattern=chromium tests/ui.test.cjs tests/private-auth-ui.test.cjs tests/project-draft.test.cjs tests/acceptance.test.cjs
 ```
 
 Automated Chromium on a Windows runner establishes that tested configuration.
@@ -71,3 +71,18 @@ scale/shear are rejected. Imported mesh files do not gain analytic CAD history.
 See [DEPLOYMENT.md](../DEPLOYMENT.md) for the current Worker build branch,
 commands and runtime login-secret settings. Browser test results alone do not
 prove a particular Cloudflare deployment has received the latest commit.
+
+## Shipping-build acceptance without internal hooks
+
+`tests/acceptance.test.cjs` serves the actual protected distribution, without
+injecting testEval or invoking private application functions. Both browsers draw
+overlapping profiles with pointer input, select regions by touch, extrude in the
+negative direction, use visible Undo/Redo, save/open JSON, export/import STEP,
+and round-trip STL/OBJ/3MF. They then draw overlapping solids and run each Boolean
+through visible controls. Saved output is independently checked with OCCT and
+rectangle/box area-volume formulas. This caught missing visible history controls
+and inconsistent sketch mode after new-project/load/extrusion.
+
+Creating a new project cancels pending Boolean/move/draft state. Test files run
+sequentially to avoid competing WebGL contexts, with explicit browser-test and
+CI time limits. Screenshots include shipping-browser success/failure artifacts.
