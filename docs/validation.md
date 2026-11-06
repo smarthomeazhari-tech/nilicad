@@ -35,7 +35,7 @@ To reproduce on Windows after `npm ci`:
 npx playwright install chromium
 npm run build:private
 node --test tests/browser-kernel.test.cjs tests/private-auth.test.cjs
-node --test --test-name-pattern=chromium tests/ui.test.cjs tests/private-auth-ui.test.cjs tests/project-draft.test.cjs
+node --test --test-concurrency=1 --test-name-pattern=chromium tests/ui.test.cjs tests/private-auth-ui.test.cjs tests/project-draft.test.cjs
 ```
 
 Automated Chromium on a Windows runner establishes that tested configuration.
