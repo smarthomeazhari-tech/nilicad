@@ -25,6 +25,13 @@ The protected Chromium scenario deliberately loses and restores its WebGL
 context, checks the visible recovery status and unchanged document, then reads
 rendered pixels again. A graphics-driver reset must not discard the project.
 
+Boolean UI coverage selects the second body with a real touch, checks that both
+consumed meshes leave the scene, and checks the exact resulting volume for all
+three operations. Chromium also performs a real one-finger orbit after each
+operation. Touch release must reach OrbitControls even when it selects a body.
+Empty intersections and fully consumed Subtract results remove their operands;
+Undo restores them. Errors and cancelled calculations preserve their operands.
+
 ## Windows Chromium
 
 The `windows` job in `.github/workflows/cad-ui.yml` runs on `windows-latest`,
