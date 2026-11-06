@@ -95,6 +95,12 @@ events through CDP; an event observer verifies that pen input reached the page.
 WebKit runs the same drawing/file workflow with mouse and touch input. Neither
 case substitutes for a physical Apple Pencil test.
 
+Malformed STL, multi-object OBJ containing non-finite coordinates, broken 3MF,
+and invalid CAD files are also opened through the shipping file inputs. They
+must leave all prior objects and modeling history unchanged. Mesh import stages
+and validates every body before one atomic commit, rejects empty/zero-area
+triangle sets and invalid indices, and limits input files to 20 MB.
+
 ## Optional IGES validation
 
 Three converter test groups check asymmetric bounds/units, holes, signed and
