@@ -357,9 +357,9 @@ const raycaster=new THREE.Raycaster(),pointer=new THREE.Vector2();
 function toast(msg){const t=document.querySelector('#toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),1800)}
 let redoStack=[];
 function state(){return items.map(o=>({id:o.id,name:o.name,type:o.type,dims:{...o.dims},pos:o.mesh.position.toArray(),rot:o.mesh.rotation.toArray().slice(0,3),scale:o.mesh.scale.toArray(),plane:o.plane||'XY',operations:o.operations||[],exactRecipe:o.exactRecipe||null,exactBaseMatrix:o.exactBaseMatrix||null,featureMaster:o.featureMaster||null,sketch:o.sketch||null,geometryJSON:o.type==='booleanMesh'?o.mesh.geometry.toJSON():null}))}
-function ncUndoState(){return {objects:state(),regions:ncRegions.map(ncRegionData)}}
+function ncUndoState(){const project=ncProjectData();return {objects:project.objects,regions:project.sketchRegions,draft:project.sketchDraft}}
 function snapshot(){history.push(ncUndoState());redoStack=[];if(history.length>30)history.shift()}
-function restore(s){if(!Array.isArray(s)){const objects=s.objects.map(o=>({...o,dimensions:o.dims,position:o.pos,rotation:o.rot}));ncLoadProject({format:'NiliCAD-Web',version:'5.0',units:'mm',objects,sketchRegions:s.regions||[]},false);return}gizmo.detach();items.forEach(o=>{world.remove(o.mesh);o.mesh.geometry.dispose()});items=s.map(d=>{const mesh=new THREE.Mesh(d.type==='booleanMesh'&&d.geometryJSON?new THREE.BufferGeometryLoader().parse(d.geometryJSON):geometry(d.type,d.dims),mat.clone());mesh.position.fromArray(d.pos);if(d.rot)mesh.rotation.set(...d.rot);if(d.scale)mesh.scale.fromArray(d.scale);mesh.userData.objectId=d.id;if(!d.rot){if(d.plane==='XZ')mesh.rotation.x=Math.PI/2;if(d.plane==='YZ')mesh.rotation.z=-Math.PI/2;}world.add(mesh);return {...d,mesh,exactRecipe:d.exactRecipe||null,exactBaseMatrix:d.exactBaseMatrix||null,featureMaster:d.featureMaster||null}});nextId=Math.max(1,...items.map(o=>o.id+1));select(null);refreshList()}
+function restore(s){if(!Array.isArray(s)){const objects=s.objects.map(o=>({...o,dimensions:o.dims,position:o.pos,rotation:o.rot}));ncLoadProject({format:'NiliCAD-Web',version:'5.0',units:'mm',objects,sketchRegions:s.regions||[],sketchDraft:s.draft||null},false);return}gizmo.detach();items.forEach(o=>{world.remove(o.mesh);o.mesh.geometry.dispose()});items=s.map(d=>{const mesh=new THREE.Mesh(d.type==='booleanMesh'&&d.geometryJSON?new THREE.BufferGeometryLoader().parse(d.geometryJSON):geometry(d.type,d.dims),mat.clone());mesh.position.fromArray(d.pos);if(d.rot)mesh.rotation.set(...d.rot);if(d.scale)mesh.scale.fromArray(d.scale);mesh.userData.objectId=d.id;if(!d.rot){if(d.plane==='XZ')mesh.rotation.x=Math.PI/2;if(d.plane==='YZ')mesh.rotation.z=-Math.PI/2;}world.add(mesh);return {...d,mesh,exactRecipe:d.exactRecipe||null,exactBaseMatrix:d.exactBaseMatrix||null,featureMaster:d.featureMaster||null}});nextId=Math.max(1,...items.map(o=>o.id+1));select(null);refreshList()}
 
 function profileGeometry(type,d){
  const w=d.x,h=d.y,depth=d.z,r=Math.min(d.r||Math.min(w,h)*.12,w*.45,h*.45);
@@ -1563,10 +1563,25 @@ document.getElementById('ncItems').onclick=()=>{const open=ncItemsPanel.classLis
 document.getElementById('ncHome').onclick=()=>document.getElementById('newBtn').click();document.getElementById('ncMenu').onclick=()=>{const answer=prompt('مدیریت پروژه: 1 ذخیره، 2 بازکردن، 3 STEP، 4 STL','1');if(answer==='1')document.getElementById('saveBtn').click();else if(answer==='2')document.getElementById('openBtn').click();else if(answer==='3')document.getElementById('stepBtn').click();else if(answer==='4')document.getElementById('stlBtn').click()};
 // Versioned, self-contained project format. Construct and validate before replacing the document.
 function ncRegionData(r){return r.brep?{brep:r.brep,positions:r.positions,indices:r.indices,area:r.area}:{segments:r.segments,points:r.points,circle:r.circle}}
+function ncDraftData(){
+ if(skClosed||skCircle||(!skSegments.length&&!skPoints.length&&!skArcPoints.length&&!nc.rectStart))return null;
+ return structuredClone({tool:nc.tool,segments:skSegments,points:skPoints,arcPoints:skArcPoints,rectStart:nc.rectStart});
+}
+function ncValidateDraft(data){
+ if(data==null)return null;
+ const fail=()=>{throw Error('ترسیم نیمه‌تمام معتبر نیست')};
+ if(typeof data!=='object'||!['line','arc','circle','rectangle'].includes(data.tool))fail();
+ const point=p=>{if(!p||!Number.isFinite(p.x)||!Number.isFinite(p.y)||Math.max(Math.abs(p.x),Math.abs(p.y))>1e6)fail();return {x:p.x,y:p.y}};
+ const points=(list,limit)=>{if(!Array.isArray(list)||list.length>limit)fail();return list.map(point)};
+ const draft={tool:data.tool,points:points(data.points,2001),arcPoints:points(data.arcPoints,2),rectStart:data.rectStart==null?null:point(data.rectStart)};
+ if(!Array.isArray(data.segments)||data.segments.length>2000)fail();
+ draft.segments=data.segments.map(s=>{if(!s||!['line','arc'].includes(s.kind))fail();const seg={kind:s.kind,a:point(s.a),b:point(s.b)};if(skDistance(seg.a,seg.b)<1e-8)fail();if(s.kind==='arc'){seg.m=point(s.m);if(!skArcShape(seg.a,seg.m,seg.b))fail()}return seg});
+ return draft;
+}
 function ncProjectData(){
  const regions=ncRegions.map(ncRegionData);
  if((skClosed||skCircle)&&nc.surface)regions.push({segments:structuredClone(skSegments),points:structuredClone(skPoints),circle:structuredClone(skCircle)});
- return {format:'NiliCAD-Web',version:'5.0',units:'mm',sketchRegions:regions,objects:state().map(o=>({...o,dimensions:o.dims,position:o.pos,rotation:o.rot}))};
+ return {format:'NiliCAD-Web',version:'5.0',units:'mm',sketchRegions:regions,sketchDraft:ncDraftData(),objects:state().map(o=>({...o,dimensions:o.dims,position:o.pos,rotation:o.rot}))};
 }
 function ncBuildRegion(data){
  let g;if(data.brep)g=ncMeshGeometry(data);else{if(!Array.isArray(data.segments)||!Array.isArray(data.points))throw Error('ناحیه Sketch نامعتبر است');const shape=ncRegionShape({...data,closed:true});if(!shape)throw Error('ناحیه بسته نیست');g=new THREE.ShapeGeometry(shape,64);g.scale(1,-1,1);g.rotateX(-Math.PI/2)}
@@ -1577,7 +1592,7 @@ function ncLoadProject(data,record=true){
  if(data.format!=='NiliCAD-Web'||!Array.isArray(data.objects)||data.objects.length>1000||Number.parseFloat(data.version||'1')>5||data.units&&data.units!=='mm')throw Error('فرمت یا نسخه پروژه پشتیبانی نمی‌شود');
  const allowed=['box','cylinder','sphere','cone','hexPrism','extrudeRect','extrudeCircle','holePlate','directionalHole','filletPlate','chamferPlate','edgeBox','booleanMesh'];
  const vector=(value,fallback,count=3)=>{value=value||fallback;if(!Array.isArray(value)||value.length!==count||value.some(v=>!Number.isFinite(v)))throw Error('مختصات نامعتبر است');return value};
- const created=[],regions=[];
+ const draft=ncValidateDraft(data.sketchDraft),created=[],regions=[];
  try{
   for(const [i,o] of data.objects.entries()){
    if(!allowed.includes(o.type))throw Error('نوع قطعه پشتیبانی نمی‌شود');
@@ -1592,9 +1607,10 @@ function ncLoadProject(data,record=true){
   for(const r of data.sketchRegions||[])regions.push(ncBuildRegion(r));
  }catch(err){created.forEach(o=>{o.mesh.geometry.dispose();o.mesh.material.dispose()});regions.forEach(r=>{r.mesh.geometry.dispose();r.mesh.material.dispose()});throw err}
  if(record)snapshot();gizmo.detach();items.forEach(o=>{world.remove(o.mesh);o.mesh.geometry.dispose();o.mesh.material.dispose()});items=created;
- ncClearRegions();ncClearVisual();skSegments=[];skPoints=[];skCircle=null;skClosed=false;skArcPoints=[];
+ ncClearRegions();ncClearVisual();skSegments=[];skPoints=[];skCircle=null;skClosed=false;skArcPoints=[];nc.rectStart=null;skPull=false;
  items.forEach(o=>world.add(o.mesh));regions.forEach(r=>{ncRegions.push(r);ncRegionLayer.add(r.mesh)});nextId=items.length+1;
  nc.mode='select';ncPull.style.display='none';document.getElementById('ncConfirm').style.display='none';document.getElementById('ncExtrude').disabled=true;select(null);refreshList();
+ if(draft){ncSetTool(draft.tool);skSegments=draft.segments;skPoints=draft.points;skArcPoints=draft.arcPoints;nc.rectStart=draft.rectStart;nc.mode='sketch';document.getElementById('ncSketchGroup').classList.add('open');document.getElementById('ncSketch').classList.add('active');ncDraw()}
 }
 document.getElementById('saveBtn').onclick=()=>{try{download(new Blob([JSON.stringify(ncProjectData())],{type:'application/json'}),'NiliCAD-project-v5.json');ncMessage('پروژه ذخیره شد')}catch(err){ncMessage('خطای ذخیره: '+err.message)}};
 document.getElementById('fileInput').onchange=async e=>{const file=e.target.files?.[0];if(!file)return;try{ncLoadProject(JSON.parse(await file.text()));ncMessage('پروژه و نواحی Sketch باز شدند')}catch(err){ncMessage('خطای بازکردن؛ پروژه قبلی حفظ شد: '+err.message)}finally{e.target.value=''}};
