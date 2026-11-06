@@ -5,14 +5,14 @@ const path=require('node:path');
 const http=require('node:http');
 const {chromium,webkit}=require('playwright');
 
-for(const [name,engine] of Object.entries({chromium,webkit}))test(name+' saves, reopens and completes unfinished sketch without losing the document',async()=>{
+for(const [name,engine] of Object.entries({chromium,webkit}))test(name+' saves, reopens and completes unfinished sketch without losing the document',async t=>{
  const root=path.resolve(__dirname,'..');
  const server=http.createServer((req,res)=>{
   const file=path.resolve(root,req.url==='/'?'index.html':req.url.slice(1));
   if(!file.startsWith(root+path.sep)){res.writeHead(404);res.end();return}
   try{
    let data=fs.readFileSync(file);
-   if(path.basename(file)==='index.html')data=Buffer.from(data.toString()
+   if(path.basename(file)==='index.html')data=Buffer.from(data.toString().replace(/\r\n/g,'\n')
     .replace('https://cdn.jsdelivr.net/npm/three@0.164.1/build/three.module.js','/node_modules/three/build/three.module.js')
     .replace('https://cdn.jsdelivr.net/npm/three@0.164.1/examples/jsm/','/node_modules/three/examples/jsm/')
     .replace('\n</script>\n<input type="file" id="ncCADFile"','\nwindow.testEval=code=>eval(code);\n</script>\n<input type="file" id="ncCADFile"'));
@@ -22,7 +22,7 @@ for(const [name,engine] of Object.entries({chromium,webkit}))test(name+' saves, 
  await new Promise(r=>server.listen(0,'127.0.0.1',r));
  let browser;
  try{
-  browser=await engine.launch({args:name==='chromium'?['--no-sandbox']:[]});
+  browser=await engine.launch({args:name==='chromium'?['--no-sandbox']:[]});t.diagnostic('OS '+process.platform+' '+require('node:os').release()+'; '+name+' '+browser.version());
   const page=await browser.newPage({viewport:{width:1100,height:800},hasTouch:true});
   const errors=[];page.on('pageerror',e=>errors.push(e.message));
   await page.goto('http://127.0.0.1:'+server.address().port);await page.waitForFunction(()=>window.testEval);

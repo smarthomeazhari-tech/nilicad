@@ -6,7 +6,7 @@ import {build as bundle} from 'esbuild';
 const root=fileURLToPath(new URL('../',import.meta.url)),dist=resolve(root,'private-preview/dist');
 const build=spawnSync(process.execPath,['browser-engine/build.mjs'],{cwd:root,stdio:'inherit'});if(build.status!==0)throw Error('Browser engine build failed');
 await rm(dist,{recursive:true,force:true});await mkdir(resolve(dist,'browser-engine'),{recursive:true});await mkdir(resolve(dist,'vendor'),{recursive:true});
-let html=await readFile(resolve(root,'index.html'),'utf8');html=html.replace('https://cdn.jsdelivr.net/npm/three@0.164.1/build/three.module.js','./vendor/three.module.js').replace('https://cdn.jsdelivr.net/npm/three@0.164.1/examples/jsm/','./vendor/addons/');
+let html=(await readFile(resolve(root,'index.html'),'utf8')).replace(/\r\n/g,'\n');html=html.replace('https://cdn.jsdelivr.net/npm/three@0.164.1/build/three.module.js','./vendor/three.module.js').replace('https://cdn.jsdelivr.net/npm/three@0.164.1/examples/jsm/','./vendor/addons/');
 const marker='\n</script>\n<input type="file" id="ncCADFile"';
 if(!html.includes(marker))throw Error('Application bootstrap location changed');
 html=html.replace(marker,`\n(async()=>{try{const response=await fetch('./demo.json');if(!response.ok)throw Error('دریافت مدل نمونه انجام نشد');ncLoadProject(await response.json());document.getElementById('ncProject').textContent='Private CAD';camera.position.set(175,155,195);camera.zoom=1.15;camera.updateProjectionMatrix();controls.target.set(10,6,0);controls.update()}catch(error){ncMessage(error.message)}})();\n`+marker);
@@ -14,7 +14,7 @@ html=html.replace(marker,`\n(async()=>{try{const response=await fetch('./demo.js
 // Keep the geometry worker separate so the UI can render before OCCT is downloaded.
 const application=html.match(/<script type="module">([\s\S]*?)<\/script>/);
 if(!application)throw Error('Application module missing');
-await bundle({stdin:{contents:application[1]+`\nwindow.ncStartupReady=true;clearTimeout(window.ncStartupTimer);\n`,resolveDir:root,sourcefile:'cad-application.js'},outfile:resolve(dist,'app.js'),bundle:true,format:'iife',target:['safari15'],plugins:[{name:'browser-worker-url',setup(build){build.onLoad({filter:/browser-engine\/client\.mjs$/},async args=>({contents:(await readFile(args.path,'utf8')).replace("new URL('./dist/worker.js',import.meta.url)","new URL('./browser-engine/dist/worker.js',document.baseURI)"),loader:'js'}))}}]});
+await bundle({stdin:{contents:application[1]+`\nwindow.ncStartupReady=true;clearTimeout(window.ncStartupTimer);\n`,resolveDir:root,sourcefile:'cad-application.js'},outfile:resolve(dist,'app.js'),bundle:true,format:'iife',target:['safari15'],plugins:[{name:'browser-worker-url',setup(build){build.onLoad({filter:/browser-engine[\\/]client\.mjs$/},async args=>({contents:(await readFile(args.path,'utf8')).replace("new URL('./dist/worker.js',import.meta.url)","new URL('./browser-engine/dist/worker.js',document.baseURI)"),loader:'js'}))}}]});
 html=html.replace(application[0],'<script defer src="./app.js"></script>');
 html=html.replace(/<script type="importmap">[\s\S]*?<\/script>/,'');
 html=html.replace('</head>',`<script>

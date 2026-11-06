@@ -1,61 +1,63 @@
-# Current browser-only path (2026-11-05)
+# Current validation and acceptance
 
-Run `npm ci && npm test`; no backend is needed. The default engine runs OCCT
-WebAssembly in a Worker. See [browser-engine.md](browser-engine.md) for build,
-distribution, tests and format limits. The paired-server instructions below
-describe the optional server mode and earlier verification.
+The Cloudflare release branch is `feat/private-preview-auth`. Main remains
+unchanged. The private deployment runs exact OCCT WebAssembly locally; it needs
+no geometry server. See [browser-engine.md](browser-engine.md) and
+[project-format.md](project-format.md).
 
-# Running and validating the paired changes
+## Linux Chromium and WebKit
 
-The main branches have not been modified or merged. PRs are stacked so each
-stage can be reviewed independently. Deploy both repositories together after
-review; the current public main deployment does not contain these changes.
+```sh
+npm ci
+npx playwright install --with-deps chromium webkit
+npm test
+```
 
-## Local setup
+The 20 test groups cover exact primitives and Booleans (including empty
+intersections), independent overlapping/nested regions, circular holes, signed
+multiple extrusion, old Python B-Rep compatibility and asymmetric STEP round
+trips. Browser tests exercise selection, actual drawing, pull drag/cancel,
+interrupted pen events, private authenticated rendering, JSON save/open,
+unfinished sketches, undo/redo, invalid-file preservation, and STL/OBJ/3MF.
+Geometry requests must stay inside the browser. Private UI startup is tested
+with a tablet viewport; blocked app downloads must show an error.
 
-Backend: `pip install -r requirements-dev.txt`, then
-`python -m unittest discover -s tests -v` and
-`python -m uvicorn server:app --host 127.0.0.1 --port 8765`.
+## Windows Chromium
 
-Frontend: `npm ci`, `npx playwright install --with-deps chromium webkit`, then
-`npm test`. Tests serve the frontend on a temporary HTTP port, use local pinned
-Three.js assets, and call the backend on port 8765. Test-only lexical hooks are
-injected into the served HTML; they are absent from the shipping application.
-Production currently still loads Three.js from CDN.
+The `windows` job in `.github/workflows/cad-ui.yml` runs on `windows-latest`,
+builds the private bundle on Windows, and runs geometry/authentication checks
+plus all three Chromium browser scenarios. Each browser test prints the OS and
+browser version; screenshots are uploaded as a separate Windows artifact.
 
-To try the app, serve the frontend directory using `python -m http.server 8080`.
-Configure the CAD engine address from the existing server settings. iPad needs
-an accessible HTTPS backend and frontend; 127.0.0.1 on the iPad is the iPad.
-The backend retains its existing open CORS and unauthenticated deployment model.
+To reproduce on Windows after `npm ci`:
 
-## Automated coverage
+```sh
+npx playwright install chromium
+npm run build:private
+node --test tests/browser-kernel.test.cjs tests/private-auth.test.cjs
+node --test --test-concurrency=1 --test-name-pattern=chromium tests/ui.test.cjs tests/private-auth-ui.test.cjs tests/project-draft.test.cjs
+```
 
-The OCCT unittest suite checks exact face areas, independently extruded region
-volumes with no positive-volume overlaps, analytic circle/circle intersections,
-nested holes, signed extrusion, single/coincident/disjoint profiles, all three
-Boolean volumes, empty intersections, invalid requests, CAD round trips and
-ranged STEP download.
+Automated Chromium on a Windows runner establishes that tested configuration.
+It does not establish every Windows browser or interactive hardware gesture.
 
-Both Chromium and WebKit run the same browser scenarios: touch selection,
-visible pull handle, extrusion, undo/redo, overlapping profile splitting,
-multi-region negative extrusion, circular holes, exact Boolean volumes,
-server failure preserving operands, JSON download/open with raw and exact
-sketch regions, invalid project preserving the document, STEP/IGES file
-save/import, STL/OBJ/3MF mesh round trips. Screenshots are test artifacts.
-Tests use fixture setup through the module hook and actual pointer/form/file
-interactions. They do not establish every freehand Pencil gesture.
+## Optional Python engine
 
-CI pins a compatible backend commit; update that ref intentionally when its
-API changes. No test result on Linux substitutes for physical device acceptance.
+The existing `nilicad-occt-server` review branches remain available. In that
+repository run `pip install -r requirements-dev.txt` then
+`python -m unittest discover -s tests -v`. Eight test groups cover exact splitting,
+holes, signed extrusion, all Booleans, STEP/IGES round trips, malformed requests
+and ranged downloads. These server results do not imply browser IGES support.
 
-## Remaining acceptance boundary
+## Physical acceptance and limits
 
-Physical iPad Safari / Apple Pencil and an actual Windows browser are not
-available in this executor. Keep the device acceptance issue open until those
-checks are run. In particular check Pencil drawing, touch orbit vs selection,
-flipping/dragging the pull handle, Files downloads, opening the saved project,
-STEP/IGES import, mixed selection and page reload.
+The owner confirmed private login and the repaired viewport on their iPad
+Safari. Pencil gestures, modeling, Files downloads and interoperable STEP still
+need physical-device confirmation in GitHub issue #6. Linux WebKit is not a
+physical Safari test. IGES is unavailable in the current serverless package
+(issue #13); STEP is the supported exact interchange format. Nonuniform
+scale/shear are rejected. Imported mesh files do not gain analytic CAD history.
 
-Mesh imports preserve triangles and transforms; they do not become analytic
-B-Rep solids. Exact CAD operations on them deliberately report unavailable
-history. A mesh-to-B-Rep conversion workflow is outside this patch.
+See [DEPLOYMENT.md](../DEPLOYMENT.md) for the current Worker build branch,
+commands and runtime login-secret settings. Browser test results alone do not
+prove a particular Cloudflare deployment has received the latest commit.

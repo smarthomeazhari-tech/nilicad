@@ -2,9 +2,10 @@ import {build} from 'esbuild';
 import {mkdir,copyFile,writeFile,readFile,rm} from 'node:fs/promises';
 import {createHash} from 'node:crypto';
 import {createRequire} from 'node:module';
+import {fileURLToPath} from 'node:url';
 const require=createRequire(import.meta.url),out=new URL('./dist/',import.meta.url);
 await rm(out,{recursive:true,force:true});await mkdir(out,{recursive:true});
-await build({entryPoints:[new URL('./worker.mjs',import.meta.url).pathname],bundle:true,platform:'browser',format:'esm',target:'es2022',external:['node:*'],outfile:new URL('worker.js',out).pathname,minify:true,legalComments:'linked'});
+await build({entryPoints:[fileURLToPath(new URL('./worker.mjs',import.meta.url))],bundle:true,platform:'browser',format:'esm',target:'es2022',external:['node:*'],outfile:fileURLToPath(new URL('worker.js',out)),minify:true,legalComments:'linked'});
 const wasm=await readFile(require.resolve('replicad-opencascadejs/wasm')),sha256=createHash('sha256').update(wasm).digest('hex'),parts=[];
 for(let offset=0,index=0;offset<wasm.length;offset+=4*1024*1024,index++){const data=wasm.subarray(offset,Math.min(offset+4*1024*1024,wasm.length)),file=`occt-${sha256.slice(0,12)}-${index}.wasm`;await writeFile(new URL(file,out),data);parts.push({file,size:data.length})}
 await writeFile(new URL('occt-manifest.json',out),JSON.stringify({size:wasm.length,sha256,parts}));
