@@ -1,5 +1,10 @@
 # Private Cloudflare deployment
 
+Owner's permanent site: <https://nilicad.smart-home-azhari.workers.dev>.
+Login secrets belong in **Runtime variables and secrets > Production**, not
+the similarly named variables section inside Build settings. Both
+`AUTH_USERNAME` and `AUTH_PASSWORD` must be present at runtime.
+
 For the Cloudflare Worker named `nilicad`, use the following Git build settings:
 
 - Repository: `smarthomeazhari-tech/nilicad`
