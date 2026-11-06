@@ -1,0 +1,23 @@
+mainBuild:
+  name: nilicad_iges.js
+  bindings:
+    - symbol: NiliCADIGES
+  emccFlags:
+    - -fwasm-exceptions
+    - -sEXPORT_EXCEPTION_HANDLING_HELPERS
+    - -sEXPORT_ES6=1
+    - -sMODULARIZE
+    - -sALLOW_MEMORY_GROWTH=1
+    - -sINITIAL_MEMORY=32MB
+    - -sMAXIMUM_MEMORY=512MB
+    - -sEXPORTED_RUNTIME_METHODS=["FS","wasmMemory"]
+    - -sENVIRONMENT=web,worker,node
+    - --no-entry
+    - -sERROR_ON_UNDEFINED_SYMBOLS=0
+    - -sSTACK_SIZE=8388608
+    - -sWASM_BIGINT
+    - -msimd128
+    - -O3
+    - -sEVAL_CTORS=2
+additionalCppFiles:
+  - converter.cpp

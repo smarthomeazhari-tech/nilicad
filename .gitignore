@@ -5,3 +5,4 @@ private-preview/dist/
 .wrangler/
 .dev.vars*
 .env*
+browser-engine/iges/generated/
