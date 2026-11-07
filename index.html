@@ -1823,6 +1823,29 @@ ncGraphicsStatus.style.cssText='position:fixed;top:90px;left:20%;right:20%;z-ind
 canvas.addEventListener('webglcontextlost',event=>{event.preventDefault();if(ncPen.active)ncCancelPen({pointerId:ncPen.active.id});ncGraphicsStatus.hidden=false;ncGraphicsStatus.textContent='نمایشگر سه‌بعدی موقتاً قطع شده است؛ منتظر بازیابی بمانید. مدل شما در حافظه حفظ شده است.'});
 canvas.addEventListener('webglcontextrestored',()=>{resize();ncGraphicsStatus.hidden=true;ncMessage('نمایشگر سه‌بعدی بازیابی شد؛ مدل حفظ شده است')});
 
+
+// IndexedDB recovery is local to this browser profile; explicit project downloads remain portable.
+let ncRecovered=false,ncRecoveryDB=null,ncRecoveryLast=null,ncRecoveryWriting=false;
+const ncRecoveryStatus=document.createElement('div');ncRecoveryStatus.id='ncRecoveryStatus';ncRecoveryStatus.setAttribute('role','status');ncRecoveryStatus.style.cssText='position:fixed;bottom:4px;right:12px;font-size:11px;color:#536776;z-index:20;direction:rtl';document.body.appendChild(ncRecoveryStatus);
+function ncRecoveryTransaction(mode,operation){return new Promise((resolve,reject)=>{const tx=ncRecoveryDB.transaction('projects',mode);let result;const request=operation(tx.objectStore('projects'));request.onsuccess=()=>{result=request.result};tx.oncomplete=()=>resolve(result);tx.onerror=()=>reject(tx.error||Error('Recovery storage failed'));tx.onabort=()=>reject(tx.error||Error('Recovery storage aborted'))})}
+async function ncRecoverySave(){
+ if(!ncRecoveryDB||ncRecoveryWriting||ncBusy||ncPen.active||nc.drag)return;
+ ncRecoveryWriting=true;
+ try{const serialized=JSON.stringify(ncProjectData());if(serialized===ncRecoveryLast)return;await ncRecoveryTransaction('readwrite',store=>store.put({version:1,document:serialized,savedAt:Date.now()},'current'));ncRecoveryLast=serialized;ncRecoveryStatus.textContent='بازیابی محلی ذخیره شد';ncRecoveryStatus.dataset.state='saved'}
+ catch(error){ncRecoveryStatus.textContent='ذخیرهٔ خودکار در دسترس نیست؛ فایل پروژه را ذخیره کنید';ncRecoveryStatus.dataset.state='error'}
+ finally{ncRecoveryWriting=false}
+}
+const ncRecoveryReady=(async()=>{
+ try{
+  ncRecoveryDB=await new Promise((resolve,reject)=>{const request=indexedDB.open('NiliCAD-recovery',1);request.onupgradeneeded=()=>request.result.createObjectStore('projects');request.onsuccess=()=>resolve(request.result);request.onerror=()=>reject(request.error);request.onblocked=()=>reject(Error('Recovery storage blocked'))});
+  ncRecoveryDB.onversionchange=()=>{ncRecoveryDB.close();ncRecoveryDB=null};
+  const saved=await ncRecoveryTransaction('readonly',store=>store.get('current'));
+  if(saved){if(saved.version!==1||typeof saved.document!=='string')throw Error('Invalid recovery record');ncLoadProject(JSON.parse(saved.document),false);ncRecoveryLast=JSON.stringify(ncProjectData());ncRecovered=true;ncRecoveryStatus.textContent='پروژه از حافظهٔ همین دستگاه بازیابی شد';ncRecoveryStatus.dataset.state='restored'}
+ }catch(error){ncRecoveryDB?.close();ncRecoveryDB=null;ncRecoveryStatus.textContent='بازیابی محلی در دسترس نیست؛ فایل پروژه را ذخیره کنید';ncRecoveryStatus.dataset.state='error'}
+})();
+// Commit only complete gestures/operations. A bounded interval also covers transforms and unfinished sketches.
+ncRecoveryReady.then(()=>{setInterval(ncRecoverySave,1500);for(const event of ['pointerup','change','click'])document.addEventListener(event,()=>queueMicrotask(ncRecoverySave));document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden')ncRecoverySave()});window.addEventListener('pagehide',ncRecoverySave)});
+
 </script>
 <input type="file" id="ncCADFile" accept=".step,.stp,.iges,.igs" hidden><input type="file" id="ncMeshFile" accept=".stl,.obj,.3mf" hidden><div id="ncTop"><button class="ncBtn" id="ncHome">⌂</button><span class="ncTitle">NiliCAD v4.2.0 · <span id="ncProject">Untitled Project</span></span><button class="ncBtn" id="ncUndo" title="بازگشت Undo" aria-label="Undo" disabled>↶</button><button class="ncBtn" id="ncRedo" title="تکرار Redo" aria-label="Redo" disabled>↷</button><button class="ncBtn" id="ncMenu">•••</button></div>
 <div id="ncLeft"><button class="ncBtn" id="ncItems"><span class="ncIcon">▱</span>Items</button><div class="ncSeparator"></div>
