@@ -1064,16 +1064,7 @@ directPalette.addEventListener('click',e=>{
  else if(a==='close'){directHidden=true;directPalette.style.display='none';gizmo.detach();gizmoMode=null}
  updateDirectPalette();
 });
-// An empty-space tap exits the selection, like direct CAD interfaces.
-canvas.addEventListener('pointerup',e=>{
- if(draftMode||moveMode||gizmo.dragging||e.target!==canvas)return;
- const r=canvas.getBoundingClientRect();
- pointer.set((e.clientX-r.left)/r.width*2-1,-((e.clientY-r.top)/r.height*2-1));
- raycaster.setFromCamera(pointer,camera);
- if(!raycaster.intersectObjects(items.map(o=>o.mesh),false).length && selected){
-  gizmo.detach();gizmoMode=null;select(null);directHidden=false;
- }
-});
+// ncPenDown handles empty-space taps. Pointer release must preserve selection after a gizmo or camera drag.
 // Keep palette following solids when the camera or object moves.
 let paletteFrame=0;
 function followDirectPalette(){if((paletteFrame++%3)===0 && directPalette.offsetParent)updateDirectPalette();requestAnimationFrame(followDirectPalette)}
@@ -1852,7 +1843,7 @@ ncRecoveryReady.then(()=>{setInterval(ncRecoverySave,1500);for(const event of ['
 
 controls.mouseButtons.RIGHT=THREE.MOUSE.ROTATE;controls.mouseButtons.MIDDLE=THREE.MOUSE.PAN;
 ncWorkspace=installWorkspaceUI({
- state:()=>({mode:nc.mode,tool:nc.tool,boolean:!!booleanPending,transform:!!gizmoMode,regions:ncSelectedRegions.size,closed:!!(skClosed||skCircle),body:selected?{name:selected.name,dims:selected.dims}:null,grid:grid.visible}),
+ state:()=>({mode:nc.mode,tool:nc.tool,boolean:!!booleanPending,transform:!!gizmoMode,regions:ncSelectedRegions.size,closed:!!(skClosed||skCircle),body:selected?{name:selected.name,dims:{x:selected.dims.x,y:selected.dims.y,z:selected.dims.z}}:null,grid:grid.visible}),
  action:(name,payload)=>{
   if(name==='fit'){document.getElementById('fitBtn').click();controls.update();return}
   if(name==='front'||name==='right'){setView(name);return}
