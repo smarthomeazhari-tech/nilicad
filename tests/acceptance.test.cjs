@@ -62,9 +62,9 @@ for(const [name,engine] of Object.entries({chromium,webkit}))test(name+' shippin
   // Incomplete converter assets must preserve the document and permit a clean retry.
   await open(project);const beforeAssetFailure=await save();
   await context.route('**/iges-*.wasm',route=>route.fulfill({status:200,contentType:'application/wasm',body:Buffer.from('incomplete')}));
-  await page.locator('#ncExportIGES').click();await page.waitForFunction(()=>document.getElementById('ncStatus').textContent.includes('خطای IGES'),{},{timeout:30000});
+  await files();await page.locator('#ncExportIGES').click();await page.waitForFunction(()=>document.getElementById('ncStatus').textContent.includes('خطای IGES'),{},{timeout:30000});
   assert.equal(await page.locator('#stepSavePanel').isVisible(),false);assert.deepEqual((await save()).objects,beforeAssetFailure.objects);
-  await context.unroute('**/iges-*.wasm');await page.locator('#ncExportIGES').click();await page.locator('#stepSaveNow').waitFor({state:'visible'});await page.locator('#stepSaveClose').click();
+  await context.unroute('**/iges-*.wasm');await files();await page.locator('#ncExportIGES').click();await page.locator('#stepSaveNow').waitFor({state:'visible'});await page.locator('#stepSaveClose').click();
   // Build overlapping solids entirely through visible drawing controls.
   await blank();await page.locator('[data-nctool="rectangle"]').click();await drag([330,350],[520,500]);await extrude(10,1);
   await page.locator('#ncSketch').click();await page.locator('[data-nctool="rectangle"]').click();await drag([620,430],[440,600]);await extrude(10,2);
@@ -76,7 +76,7 @@ for(const [name,engine] of Object.entries({chromium,webkit}))test(name+' shippin
    const result=await save();close((await kernel.handle('/evaluate',result.objects[0].exactRecipe)).volume,want,.02);
    await page.locator('#ncUndo').click();assert.equal((await save()).objects.length,2);await page.locator('#ncRedo').click();assert.equal((await save()).objects.length,1);
   }
-  await page.locator('#ncItems').click();await page.locator('#objectList .treeitem').first().click();await page.locator('#ncItems').click();await page.locator('#ncUnion').click();await blank();assert.equal(await page.locator('#booleanBanner').isVisible(),false);
+  await page.locator('#ncItems').click();await page.locator('#objectList .treeitem').first().click();await page.locator('#ncItems').click();if(!await page.locator('#ncBoolGroup').isVisible())await page.locator('#ncBool').click();await page.locator('#ncUnion').click();await blank();assert.equal(await page.locator('#booleanBanner').isVisible(),false);
   // Explicitly switch tools and draw a hole inside an existing closed rectangle.
   await page.locator('[data-nctool="rectangle"]').click();await drag([330,350],[620,600]);
   await page.locator('[data-nctool="circle"]').click();assert.equal(await page.locator('#ncExtrude').isDisabled(),true);await drag([470,470],[500,470]);
@@ -107,6 +107,6 @@ for(const [name,engine] of Object.entries({chromium,webkit}))test(name+' shippin
   if(pen){assert.ok(await page.evaluate(()=>window.observedPenDowns)>10,'Chromium must receive real pen-type input');await pen.detach()}
   fs.mkdirSync(path.resolve(__dirname,'../test-results'),{recursive:true});await page.screenshot({path:path.resolve(__dirname,'../test-results/shipping-'+name+'.png')});
   assert.deepEqual(errors,[]);assert.deepEqual(remote,[]);
- }catch(error){if(page){fs.mkdirSync(path.resolve(__dirname,'../test-results'),{recursive:true});await page.screenshot({path:path.resolve(__dirname,'../test-results/shipping-'+name+'-failure.png'),timeout:5000}).catch(()=>{})}throw error}
+ }catch(error){console.error(error.stack);if(page){fs.mkdirSync(path.resolve(__dirname,'../test-results'),{recursive:true});await page.screenshot({path:path.resolve(__dirname,'../test-results/shipping-'+name+'-failure.png'),timeout:5000}).catch(()=>{})}throw error}
  finally{await browser?.close();await host.close()}
 });
