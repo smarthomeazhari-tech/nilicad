@@ -24,9 +24,16 @@ The build is single-threaded and does not require SharedArrayBuffer or COOP/COEP
 - Self-contained B-Rep project persistence, including Python OCCT-produced files.
 - STEP export/import in millimetres, converting browser Y-up to file Z-up.
 
-IGES is not available in this WASM build; the UI disables its export in browser
-mode and reports unsupported import explicitly. STEP is the browser CAD exchange
-format. Uniform transforms are supported; unsupported nonuniform scale/shear is
+IGES import/export is provided by an optional, isolated 11 MiB OCCT converter.
+It transfers exact B-Rep through STEP, uses millimetres, and does not convert CAD
+to a triangle mesh for exchange. The adapter starts the converter only for IGES,
+checks its asset hashes, and terminates it after each conversion. When idle the
+main geometry worker is released first to reduce simultaneous engine memory.
+The converter has a 32 MiB initial WASM heap and a 512 MiB maximum; the tested
+models stay in the initial heap. Heap size is not total process memory.
+See [iges/README](../browser-engine/iges/README.md) for source, pinned build,
+artifact provenance and limitations. CAD inputs/converted outputs are limited
+to 20 MB. Nonuniform transforms remain unsupported. Uniform transforms are supported; unsupported nonuniform scale/shear is
 rejected instead of silently distorting geometry. Imported triangle meshes do
 not become analytic CAD solids.
 
@@ -40,13 +47,17 @@ Failures preserve the live document. Pull-handle previews are debounced.
 complete Chromium and WebKit scenarios. They cover Boolean volumes and empty
 results, signed multiple extrusion, independent overlapping faces, circular holes,
 analytic circle intersections, legacy Python B-Rep, STEP bounds/volume round trips,
-invalid input and explicit IGES errors. Browser tests assert that no geometry
+invalid input, IGES round trips, an independent Python IGES fixture and malformed-file preservation. Browser tests assert that no geometry
 request is sent to the former backend and exercise real drawing, handle drag and
 cancel, selection, project undo/redo, file round trips and atomic failures.
 CI installs no Python backend and starts no Uvicorn service.
 
 Physical iPad Safari/Pencil and Windows acceptance still require actual devices;
 Linux WebKit is not a substitute for those checks. See issue #6.
+
+The input regression also interrupts pen strokes with `pointercancel` and
+`lostpointercapture`, verifies that transient lines are removed without changing
+the document, and draws a new closed profile after each interrupted input.
 
 ## Distribution
 
