@@ -44,7 +44,7 @@ for(const [name,engine] of Object.entries({chromium,webkit}))test(name+' saves, 
   }
   await page.evaluate(()=>testEval(`document.getElementById('undoBtn').click()`));assert.equal(await page.evaluate(()=>testEval('ncDraftData()')),null);
   await page.evaluate(()=>testEval(`document.getElementById('redoBtn').click()`));assert.deepEqual(await page.evaluate(()=>testEval('ncDraftData()')),draft);
-  await page.locator('#ncFiles').click();
+  if(await page.locator('#ncFilesGroup').isVisible())await page.locator('#ncFiles').click();
   await drag(points[2],points[3]);await drag(points[3],points[0]);
   assert.equal(await page.evaluate(()=>testEval('skClosed')),true);
   await page.locator('#ncExtrude').click();await page.locator('#ncPull').waitFor({state:'visible'});await page.locator('#ncDepth').fill('5');await page.locator('#ncConfirm').click();

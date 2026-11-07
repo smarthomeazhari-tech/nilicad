@@ -316,6 +316,8 @@ window.addEventListener('unhandledrejection', function(e) {
 </div>
 <script type="module">
 import * as THREE from 'three';
+import {installWorkspaceUI} from './workspace-ui.mjs';
+let ncWorkspace=null;
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { STLExporter } from 'three/addons/exporters/STLExporter.js';
 import { TransformControls } from 'three/addons/controls/TransformControls.js';
@@ -351,8 +353,8 @@ for(const [id,mode] of [['gMove','translate'],['gRotate','rotate'],['gScale','sc
 document.getElementById('gOff').onclick=()=>{gizmo.detach();gizmoMode=null;['gMove','gRotate','gScale'].forEach(id=>document.getElementById(id).classList.remove('active'));controls.enabled=true};
 let items=[],selected=null,nextId=1,history=[];
 let operationLog=[];
-const mat=new THREE.MeshStandardMaterial({color:0x63b6aa,metalness:.25,roughness:.38});
-const selectedMat=new THREE.MeshStandardMaterial({color:0xf2b45d,metalness:.2,roughness:.35});
+const mat=new THREE.MeshStandardMaterial({color:0xb6c3d2,metalness:.18,roughness:.42});
+const selectedMat=new THREE.MeshStandardMaterial({color:0x69a9ed,metalness:.15,roughness:.42});
 const raycaster=new THREE.Raycaster(),pointer=new THREE.Vector2();
 function toast(msg){const t=document.querySelector('#toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),1800)}
 let redoStack=[];
@@ -419,7 +421,7 @@ function refreshList(){document.querySelector('#count').textContent=items.length
 function rebuild(o){if(o.type==='booleanMesh'){toast('برای تغییر ابعاد این نتیجه، از ابزار Scale استفاده کنید');return}const old=o.mesh;world.remove(old);old.geometry.dispose();const mesh=new THREE.Mesh(geometry(o.type,o.dims),selected===o?selectedMat:mat.clone());mesh.position.copy(old.position);mesh.rotation.copy(old.rotation);mesh.scale.copy(old.scale);mesh.userData.objectId=o.id;mesh.castShadow=true;mesh.receiveShadow=true;o.mesh=mesh;world.add(mesh);}
 function resize(){const w=canvas.clientWidth,h=canvas.clientHeight;if(!w||!h)return;renderer.setSize(w,h,false);camera.aspect=w/h;camera.updateProjectionMatrix();}
 function animate(){requestAnimationFrame(animate);controls.update();renderer.render(scene,camera)}animate();new ResizeObserver(resize).observe(canvas);
-let tapStart=null;canvas.addEventListener('pointerdown',e=>{if(e.pointerType==='touch'){tapStart={x:e.clientX,y:e.clientY,t:Date.now()};return;}selectAt(e);});canvas.addEventListener('pointerup',e=>{if(e.pointerType==='touch'&&tapStart&&Math.hypot(e.clientX-tapStart.x,e.clientY-tapStart.y)<12&&Date.now()-tapStart.t<350)selectAt(e);tapStart=null;});function selectAt(e){const r=canvas.getBoundingClientRect();pointer.x=((e.clientX-r.left)/r.width)*2-1;pointer.y=-((e.clientY-r.top)/r.height)*2+1;raycaster.setFromCamera(pointer,camera);const hits=raycaster.intersectObjects(items.map(o=>o.mesh),false);if(subshapeMode){pickSubshape(hits);return} if(hits.length){const id=hits[0].object.userData.objectId;select(items.find(o=>o.id===id)||null)}else select(null)}
+let tapStart=null;canvas.addEventListener('pointerdown',e=>{if(e.pointerType==='touch'){tapStart={x:e.clientX,y:e.clientY,t:Date.now()};return;}selectAt(e);});canvas.addEventListener('pointerup',e=>{if(e.pointerType==='touch'&&tapStart&&Math.hypot(e.clientX-tapStart.x,e.clientY-tapStart.y)<12&&Date.now()-tapStart.t<350)selectAt(e);tapStart=null;});function selectAt(e){if(gizmoMode)return;const r=canvas.getBoundingClientRect();pointer.x=((e.clientX-r.left)/r.width)*2-1;pointer.y=-((e.clientY-r.top)/r.height)*2+1;raycaster.setFromCamera(pointer,camera);const hits=raycaster.intersectObjects(items.map(o=>o.mesh),false);if(subshapeMode){pickSubshape(hits);return} if(hits.length){const id=hits[0].object.userData.objectId;select(items.find(o=>o.id===id)||null)}else select(null)}
 document.querySelector('#panelsBtn').onclick=()=>{document.querySelector('.workspace').classList.toggle('panels-open');resize()};
 document.querySelector('#openBtn').onclick=()=>document.querySelector('#fileInput').click();
 document.querySelector('#fileInput').onchange=async e=>{const f=e.target.files?.[0];if(!f)return;try{const d=JSON.parse(await f.text());if(d.format!=='NiliCAD-Web'||!Array.isArray(d.objects))throw Error('فرمت نامعتبر');gizmo.detach();const loaded=d.objects.map((o,i)=>{if(!['box','cylinder','sphere','cone','hexPrism','extrudeRect','extrudeCircle','holePlate','directionalHole','filletPlate','chamferPlate','edgeBox','booleanMesh'].includes(o.type))throw Error('نوع قطعه نامعتبر');const dims=o.dimensions;if(!dims||!['x','y','z'].every(k=>Number.isFinite(Number(dims[k]))&&Number(dims[k])>0))throw Error('ابعاد نامعتبر');const pos=Array.isArray(o.position)&&o.position.length===3&&o.position.every(Number.isFinite)?o.position:[0,0,0];return {id:i+1,name:String(o.name||'قطعه').slice(0,80),type:o.type,dims:{x:Number(dims.x),y:Number(dims.y),z:Number(dims.z),r:Number(dims.r)||undefined,hx:Number(dims.hx)||0,hy:Number(dims.hy)||0,holeAxis:['x','y','z'].includes(dims.holeAxis)?dims.holeAxis:'y',geometryJSON:o.type==='booleanMesh'?dims.geometryJSON:undefined},plane:['XY','XZ','YZ'].includes(o.plane)?o.plane:'XY',operations:Array.isArray(o.operations)?o.operations.slice(0,500):[],exactRecipe:o.exactRecipe||null,exactBaseMatrix:o.exactBaseMatrix||null,featureMaster:o.featureMaster||null,sketch:o.sketch||null,pos,rot:Array.isArray(o.rotation)&&o.rotation.length===3&&o.rotation.every(Number.isFinite)?o.rotation:null,scale:Array.isArray(o.scale)&&o.scale.length===3&&o.scale.every(v=>Number.isFinite(v)&&v>0)?o.scale:null}});snapshot();items.forEach(o=>{world.remove(o.mesh);o.mesh.geometry.dispose()});items=loaded.map(o=>{const mesh=new THREE.Mesh(geometry(o.type,o.dims),mat.clone());mesh.position.fromArray(o.pos);if(o.rot)mesh.rotation.set(...o.rot);if(o.scale)mesh.scale.fromArray(o.scale);mesh.userData.objectId=o.id;if(!o.rot){if(o.plane==='XZ')mesh.rotation.x=Math.PI/2;if(o.plane==='YZ')mesh.rotation.z=-Math.PI/2;}world.add(mesh);return {...o,mesh}});nextId=items.length+1;select(null);refreshList();toast('پروژه باز شد')}catch(err){alert('بازکردن فایل ممکن نشد: '+err.message)}e.target.value='';};
@@ -439,7 +441,7 @@ document.querySelector('#deleteBtn').onclick=()=>{if(!selected)return;stopMove()
 document.querySelector('#applyBtn').onclick=()=>{if(!selected)return;stopMove();snapshot();selected.name=document.querySelector('#objName').value||selected.name;['x','y','z'].forEach(k=>{const v=Number(document.querySelector('#dim'+k.toUpperCase()).value);if(v>0)selected.dims[k]=v});rebuild(selected);['X','Y','Z'].forEach((k,i)=>{const v=Number(document.querySelector('#pos'+k).value);if(Number.isFinite(v))selected.mesh.position.setComponent(i,v)});select(selected);toast('ابعاد و موقعیت به‌روزرسانی شد')};
 document.querySelector('#gridBtn').onclick=e=>{grid.visible=!grid.visible;e.currentTarget.classList.toggle('active',grid.visible)};
 document.querySelector('#fitBtn').onclick=()=>{if(!items.length){camera.position.set(170,145,190);controls.target.set(0,20,0);return}const box=new THREE.Box3().setFromObject(world);const center=box.getCenter(new THREE.Vector3());controls.target.copy(center);camera.position.copy(center.clone().add(new THREE.Vector3(1.3,1.05,1.5).multiplyScalar(Math.max(box.getSize(new THREE.Vector3()).length(),100)*1.4)));camera.updateProjectionMatrix()};
-function setView(v){const t=controls.target;if(v==='top')camera.position.set(t.x,t.y+260,t.z+.001);if(v==='front')camera.position.set(t.x,t.y+25,t.z+280);if(v==='iso')camera.position.set(t.x+170,t.y+145,t.z+190);camera.lookAt(t);controls.update()}
+function setView(v){const t=controls.target;if(v==='top')camera.position.set(t.x,t.y+260,t.z+.001);if(v==='front')camera.position.set(t.x,t.y,t.z+280);if(v==='right')camera.position.set(t.x+280,t.y,t.z+.001);if(v==='iso')camera.position.set(t.x+170,t.y+145,t.z+190);camera.lookAt(t);controls.update()}
 document.querySelector('#topBtn').onclick=()=>setView('top');document.querySelector('#frontBtn').onclick=()=>setView('front');document.querySelector('#isoBtn').onclick=()=>setView('iso');
 document.querySelector('#newBtn').onclick=()=>{if(ncBusy)return;if(!confirm('پروژه فعلی پاک شود؟'))return;cancelBoolean();stopMove();endDraft();gizmo.detach();gizmoMode=null;++ncPreviewEpoch;items.forEach(o=>{world.remove(o.mesh);o.mesh.geometry.dispose()});items=[];select(null);refreshList();nextId=1;history=[];redoStack=[];ncHistoryUI();ncSetSketchState(false);ncClearRegions();ncClearVisual();skClosed=false;skCircle=null;skSegments=[];skPoints=[];skArcPoints=[];skPull=false;nc.rectStart=null;nc.drag=null;nc.mode='select';ncPull.style.display='none';document.getElementById('ncConfirm').style.display='none';toast('پروژه جدید آماده است')};
 document.querySelector('#undoBtn').onclick=()=>{if(!history.length){toast('عملیاتی برای بازگشت نیست');return}redoStack.push(ncUndoState());restore(history.pop());ncHistoryUI();toast('Undo انجام شد')};
@@ -1387,8 +1389,8 @@ document.getElementById('showLegacyPanels').onclick=()=>{const left=document.que
 // v3: sketch entities are drawn in the actual perspective WebGL viewport, not a separate 2D canvas.
 const nc={mode:'sketch',tool:'line',points:[],arc:[],rectStart:null,circleStart:null,group:new THREE.Group(),surface:null,profile:null,preview:null,drag:null};
 world.add(nc.group);
-scene.background=new THREE.Color(0xf7f9fb);renderer.setClearColor(0xf7f9fb,1);
-grid.material.color.set(0xcbd5df);grid.material.opacity=.58;grid.material.transparent=true;axes.visible=false;
+scene.background=new THREE.Color(0xf3f5f8);renderer.setClearColor(0xf3f5f8,1);
+grid.material.vertexColors=false;grid.material.needsUpdate=true;grid.material.color.set(0xcbd5e0);grid.material.opacity=.48;grid.material.transparent=true;axes.visible=false;
 const ncLeft=document.getElementById('ncLeft'),ncPull=document.getElementById('ncPull'),ncDepth=document.getElementById('ncDepth');
 function ncMessage(msg){document.getElementById('ncStatus').textContent=msg;const el=document.getElementById('ncToast');el.textContent=msg;el.style.display='block';clearTimeout(nc._timer);nc._timer=setTimeout(()=>el.style.display='none',2200)}
 // v3.7: independent sketch regions remain visible after a solid is created.
@@ -1700,6 +1702,7 @@ ncById('ncMeshFile').onchange=async e=>{
 const ncPen={active:null};
 function ncPenPoint(e){return ncPlanePoint(e)}
 function ncPenDown(e){
+ if(gizmoMode)return;
  if(e.pointerType!=='pen' && e.pointerType!=='mouse')return;
  if(nc.mode==='pull'&&!booleanPending){
   if(e.button!==0)return;
@@ -1845,6 +1848,36 @@ const ncRecoveryReady=(async()=>{
 })();
 // Commit only complete gestures/operations. A bounded interval also covers transforms and unfinished sketches.
 ncRecoveryReady.then(()=>{setInterval(ncRecoverySave,1500);for(const event of ['pointerup','change','click'])document.addEventListener(event,()=>queueMicrotask(ncRecoverySave));document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden')ncRecoverySave()});window.addEventListener('pagehide',ncRecoverySave)});
+
+
+controls.mouseButtons.RIGHT=THREE.MOUSE.ROTATE;controls.mouseButtons.MIDDLE=THREE.MOUSE.PAN;
+ncWorkspace=installWorkspaceUI({
+ state:()=>({mode:nc.mode,tool:nc.tool,boolean:!!booleanPending,transform:!!gizmoMode,regions:ncSelectedRegions.size,closed:!!(skClosed||skCircle),body:selected?{name:selected.name,dims:selected.dims}:null,grid:grid.visible}),
+ action:(name,payload)=>{
+  if(name==='fit'){document.getElementById('fitBtn').click();controls.update();return}
+  if(name==='front'||name==='right'){setView(name);return}
+  if(name==='cancel'){
+   if(booleanPending)cancelBoolean();
+   if(ncBusy)return;
+   ++ncPreviewEpoch;nc.drag=null;clearTimeout(nc._previewTimer);if(ncPen.active)ncCancelPen({pointerId:ncPen.active.id});
+   if(nc.mode==='pull'){nc.mode='sketch';ncPull.style.display='none';document.getElementById('ncConfirm').style.display='none';ncDraw()}
+   if(nc.mode==='sketch'&&document.getElementById('ncSketchGroup').classList.contains('open'))document.getElementById('ncSketch').click();
+   ncSetSketchState(false);document.getElementById('gOff').click();ncMessage('ابزار پایان یافت؛ طرح حفظ شد');return;
+  }
+  if(name==='deselect'){document.getElementById('gOff').click();if((skClosed||skCircle)&&nc.surface){ncSaveRegion();skSegments=[];skPoints=[];skCircle=null;skClosed=false;ncClearVisual()}select(null);ncSelectedRegions.clear();ncActiveRegion=null;ncUpdateRegionColors();document.getElementById('ncExtrude').disabled=!(skClosed||skCircle);return}
+  if(ncBusy)return;
+  if(name==='move'||name==='rotate'){if(!selected)return;if(nc.mode==='sketch')document.getElementById('ncSketch').click();ncSetSketchState(false);document.getElementById(name==='move'?'gMove':'gRotate').click()}
+  if(name==='rename'){if(!selected||typeof payload!=='string'||!payload.trim())return;snapshot();selected.name=payload.trim().slice(0,80);select(selected);ncRecoverySave();return}
+  if(name==='transform'){
+   if(!selected||!payload||!['move','rotate'].includes(payload.mode)||!Array.isArray(payload.values)||payload.values.length!==3||payload.values.some(v=>!Number.isFinite(v)||Math.abs(v)>1e6)){ncMessage('مقدار تبدیل معتبر نیست');return}
+   if(payload.values.every(v=>v===0))return;
+   if(payload.mode==='move'&&payload.values.some((v,i)=>Math.abs(selected.mesh.position.getComponent(i)+v)>1e6)){ncMessage('موقعیت خارج از محدوده است');return}
+   snapshot();if(payload.mode==='move')selected.mesh.position.add(new THREE.Vector3(...payload.values));else{const rotation=new THREE.Quaternion().setFromEuler(new THREE.Euler(...payload.values.map(v=>THREE.MathUtils.degToRad(v))));selected.mesh.quaternion.premultiply(rotation)}
+   selected.mesh.updateMatrixWorld(true);select(selected);ncRecoverySave();ncMessage('تبدیل دقیق اعمال شد؛ برای بازگشت Undo بزنید');
+  }
+  if(name==='finishTransform')document.getElementById('gOff').click();
+ }
+});
 
 </script>
 <input type="file" id="ncCADFile" accept=".step,.stp,.iges,.igs" hidden><input type="file" id="ncMeshFile" accept=".stl,.obj,.3mf" hidden><div id="ncTop"><button class="ncBtn" id="ncHome">⌂</button><span class="ncTitle">NiliCAD v4.2.0 · <span id="ncProject">Untitled Project</span></span><button class="ncBtn" id="ncUndo" title="بازگشت Undo" aria-label="Undo" disabled>↶</button><button class="ncBtn" id="ncRedo" title="تکرار Redo" aria-label="Redo" disabled>↷</button><button class="ncBtn" id="ncMenu">•••</button></div>

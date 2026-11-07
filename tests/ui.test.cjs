@@ -15,7 +15,7 @@ for(const [name,engine] of Object.entries({chromium,webkit}))test(name+' CAD geo
  const remoteAPI=[];page.on('request',request=>{if(/8765|onrender\.com|\/evaluate$|\/regions$/.test(request.url()))remoteAPI.push(request.url())});
  const errors=[];page.on('pageerror',e=>(errors.push(e.message),console.error(e.message)));
  await page.goto('http://127.0.0.1:'+server.address().port);await page.waitForFunction(()=>typeof window.testEval==='function',{},{timeout:10000});await page.waitForTimeout(100);
- await page.locator('#ncFiles').click();await page.locator('#ncEngine').click();await page.locator('input[name=cadServerMode][value=browser]').check();await page.locator('#cadSaveServer').click();await page.locator('#ncFiles').click();
+ await page.locator('#ncFiles').click();await page.locator('#ncEngine').click();await page.locator('input[name=cadServerMode][value=browser]').check();await page.locator('#cadSaveServer').click();
  await page.evaluate(()=>testEval(`skPoints=[{x:-20,y:-20},{x:20,y:-20},{x:20,y:20},{x:-20,y:20}];skSegments=skPoints.map((a,i)=>({kind:'line',a,b:skPoints[(i+1)%4]}));skClosed=true;ncDraw();ncSaveRegion();skClosed=false;skSegments=[];skPoints=[];ncClearVisual();nc.mode='select';`));
  const screen=await page.evaluate(()=>testEval(`(()=>{const p=new THREE.Vector3(0,0,0).project(camera),r=canvas.getBoundingClientRect();return {x:r.left+(p.x+1)*r.width/2,y:r.top+(1-p.y)*r.height/2}})()`));
  await page.touchscreen.tap(screen.x,screen.y);
@@ -99,14 +99,14 @@ for(const [name,engine] of Object.entries({chromium,webkit}))test(name+' CAD geo
  await page.evaluate(()=>testEval(`document.getElementById('redoBtn').click()`));assert.equal(await page.evaluate(()=>testEval('ncRegions.length')),0);
  // Real browser CAD downloads and imports preserve exact volume.
  for(const [button,extension] of [['ncExportSTEP','step'],['ncExportIGES','iges']]){
-  await page.locator('#'+button).click();await page.locator('#stepSaveNow').waitFor({state:'visible'});const event=page.waitForEvent('download');await page.locator('#stepSaveNow').click();const file=await event;assert.ok(file.suggestedFilename().endsWith('.'+extension));
+  if(!await page.locator('#ncFilesGroup').isVisible())await page.locator('#ncFiles').click();await page.locator('#'+button).click();await page.locator('#stepSaveNow').waitFor({state:'visible'});const event=page.waitForEvent('download');await page.locator('#stepSaveNow').click();const file=await event;assert.ok(file.suggestedFilename().endsWith('.'+extension));
   const data=fs.readFileSync(await file.path());assert.ok(data.length>500);await page.locator('#stepSaveClose').click();
   const n=await page.evaluate(()=>testEval('items.length'));await page.locator('#ncCADFile').setInputFiles({name:'roundtrip.'+extension,mimeType:'application/octet-stream',buffer:data});await page.waitForFunction(n=>testEval('items.length')===n+1,n);
   const volume=await page.evaluate(()=>testEval(`(async()=>(await (await ncRequest('/evaluate',makeExactNode(items.at(-1)))).json()).volume)()`));assert.ok(Math.abs(volume-500)<1e-5);
   await page.evaluate(()=>testEval(`const last=items.pop();world.remove(last.mesh);`));
  }
  for(const [button,extension] of [['ncExportSTL','stl'],['ncExportOBJ','obj'],['ncExport3MF','3mf']]){
-  const event=page.waitForEvent('download');await page.locator('#'+button).click();const file=await event;const data=fs.readFileSync(await file.path());assert.ok(data.length>100);
+  const event=page.waitForEvent('download');if(!await page.locator('#ncFilesGroup').isVisible())await page.locator('#ncFiles').click();await page.locator('#'+button).click();const file=await event;const data=fs.readFileSync(await file.path());assert.ok(data.length>100);
   const n=await page.evaluate(()=>testEval('items.length'));await page.locator('#ncMeshFile').setInputFiles({name:'mesh.'+extension,mimeType:'application/octet-stream',buffer:data});await page.waitForFunction(n=>testEval('items.length')===n+1,n);
   const dims=await page.evaluate(()=>testEval('items.at(-1).dims'));assert.ok(Math.abs(dims.x-5)<.01);assert.ok(Math.abs(dims.y-10)<.01);assert.ok(Math.abs(dims.z-10)<.01);
   await page.evaluate(()=>testEval(`const last=items.pop();world.remove(last.mesh);`));
@@ -140,6 +140,13 @@ for(const [name,engine] of Object.entries({chromium,webkit}))test(name+' CAD geo
  }
  await page.mouse.move(stroke[0].x,stroke[0].y);await page.mouse.down();await page.mouse.move(stroke[1].x,stroke[1].y,{steps:5});await page.mouse.up();
  assert.equal(await page.evaluate(()=>testEval('skClosed')),true,'Drawing must resume after cancellation');
+ // A real mouse drag must reach TransformControls rather than the selection capture handler.
+ await page.evaluate(()=>testEval(`if((skClosed||skCircle)&&nc.surface)ncSaveRegion();ncClearVisual();skClosed=false;skCircle=null;skSegments=[];skPoints=[];ncSetSketchState(false);select(items[0]);controls.target.copy(selected.mesh.position);setView('top');gizmoMode=null;document.getElementById('gMove').click();controls.update();`));
+ await page.waitForTimeout(100);
+ const manipulation=await page.evaluate(()=>testEval(`(()=>{const handle=gizmo._gizmo.picker.translate.children.find(o=>o.name==='X');gizmo.updateMatrixWorld(true);const p=new THREE.Box3().setFromObject(handle).getCenter(new THREE.Vector3()).project(camera),r=canvas.getBoundingClientRect();return {x:r.left+(p.x+1)*r.width/2,y:r.top+(1-p.y)*r.height/2,before:selected.mesh.position.x}})()`));
+ await page.mouse.move(manipulation.x,manipulation.y);await page.mouse.down();await page.mouse.move(manipulation.x+40,manipulation.y,{steps:10});await page.mouse.up();
+ assert.ok(Math.abs(await page.evaluate(()=>testEval('selected.mesh.position.x'))-manipulation.before)>1,'Dragging the X gizmo must move the selected body');
+ await page.evaluate(()=>testEval(`document.getElementById('gOff').click();document.getElementById('undoBtn').click()`));assert.ok(Math.abs(await page.evaluate(()=>testEval('items[0].mesh.position.x'))-manipulation.before)<1e-6);
  fs.mkdirSync(path.join(root,'test-results'),{recursive:true});await page.screenshot({path:path.join(root,'test-results',name+'.png')});
  assert.equal(await page.locator('#ncExportIGES').isDisabled(),false);
  assert.deepEqual(remoteAPI,[],'No geometry request may leave the browser');
