@@ -1843,7 +1843,7 @@ ncRecoveryReady.then(()=>{setInterval(ncRecoverySave,1500);for(const event of ['
 
 controls.mouseButtons.RIGHT=THREE.MOUSE.ROTATE;controls.mouseButtons.MIDDLE=THREE.MOUSE.PAN;
 ncWorkspace=installWorkspaceUI({
- state:()=>({mode:nc.mode,tool:nc.tool,boolean:!!booleanPending,transform:!!gizmoMode,regions:ncSelectedRegions.size,closed:!!(skClosed||skCircle),body:selected?{name:selected.name,dims:{x:selected.dims.x,y:selected.dims.y,z:selected.dims.z}}:null,grid:grid.visible}),
+ state:()=>{const size=selected?new THREE.Box3().setFromObject(selected.mesh).getSize(new THREE.Vector3()):null;return {mode:nc.mode,tool:nc.tool,boolean:!!booleanPending,transform:!!gizmoMode,regions:ncSelectedRegions.size,closed:!!(skClosed||skCircle),body:selected?{name:selected.name,dims:{x:size.x,y:size.y,z:size.z}}:null,grid:grid.visible}},
  action:(name,payload)=>{
   if(name==='fit'){document.getElementById('fitBtn').click();controls.update();return}
   if(name==='front'||name==='right'){setView(name);return}
