@@ -2,6 +2,7 @@
 function installDirectModeling({ THREE, canvas, camera, controls, scene, context, enterSelect, selectBody, regionAt, request, commit, setBusy, message }) {
   const ray = new THREE.Raycaster(), pointer = new THREE.Vector2(), layer = new THREE.Group();
   scene.add(layer);
+  let edgeMode="fillet";
   let filter = "auto", selection = null, cache = null, epoch = 0, gesture = null, applying = false, lastBody = null;
   const touches = /* @__PURE__ */ new Map();
   const bar = document.createElement("div");
@@ -14,7 +15,7 @@ function installDirectModeling({ THREE, canvas, camera, controls, scene, context
   panel.id = "ncTopologyPanel";
   panel.hidden = true;
   panel.setAttribute("aria-label", "CAD face or edge");
-  panel.innerHTML = '<div class="ncTopoCaption">CAD SELECTION</div><strong id="ncTopologyTitle"></strong><p id="ncTopologyInfo"></p><label id="ncFaceDistanceLabel">Distance · mm<input id="ncFaceDistance" type="number" step="0.1" value="0" aria-label="Face pull distance"></label><p id="ncTopologyHint"></p><div class="ncTopoActions"><button id="ncApplyFace">Apply</button><button id="ncCancelFace">Cancel</button></div>';
+  panel.innerHTML = '<div class="ncTopoCaption">CAD SELECTION</div><strong id="ncTopologyTitle"></strong><p id="ncTopologyInfo"></p><label id="ncFaceDistanceLabel">Distance · mm<input id="ncFaceDistance" type="number" step="0.1" value="0" aria-label="Face pull distance"></label><p id="ncTopologyHint"></p><section id="ncEdgeTools" hidden><div class="ncTopoActions"><button id="ncEdgeFillet" aria-pressed="true">Fillet</button><button id="ncEdgeChamfer" aria-pressed="false">Chamfer</button></div><label id="ncEdgeSizeLabel">Radius · mm<input id="ncEdgeSize" type="number" min="0.01" max="10000" step="0.1" value="1" aria-label="Edge finish size"></label><label style="margin-top:10px"><input id="ncAddEdges" type="checkbox" style="width:auto;margin-right:6px">Add edges / Shift + click</label></section><div class="ncTopoActions"><button id="ncApplyEdge" hidden>Apply</button><button id="ncApplyFace">Apply</button><button id="ncCancelFace">Cancel</button></div>';
   document.body.append(panel);
   const handle = document.createElement("button");
   handle.id = "ncFaceGizmo";
@@ -25,14 +26,13 @@ function installDirectModeling({ THREE, canvas, camera, controls, scene, context
   const style = document.createElement("style");
   style.textContent = `
  #ncSelectionFilter{position:fixed;top:74px;left:50%;transform:translateX(-50%);display:flex;align-items:center;gap:3px;padding:4px;background:#ffffffed;border:1px solid #e0e6ee;border-radius:8px;z-index:64;font:11px -apple-system,Arial;color:#8590a0;direction:ltr;box-shadow:0 2px 12px #25364a08}#ncSelectionFilter>span{padding:0 7px}#ncSelectionFilter button{border:0;border-radius:5px;background:transparent;color:#566579;font:500 11px -apple-system,Arial;min-height:34px;padding:6px 10px;cursor:pointer}#ncSelectionFilter button[aria-pressed=true]{background:#e7f0fe;color:#1769e0}#ncSelectionFilter button:focus-visible,#ncTopologyPanel button:focus-visible{outline:2px solid #1769e0}body[data-nc-subselection=true] #ncInspector{display:none!important}
- #ncTopologyPanel{position:fixed;right:20px;top:326px;width:210px;box-sizing:border-box;padding:16px;background:#fff;border:1px solid #e0e6ee;border-radius:10px;box-shadow:0 4px 20px #24364a0a;z-index:67;font:12px -apple-system,Arial;color:#40516a;direction:ltr}#ncTopologyPanel[hidden],#ncFaceGizmo[hidden],#ncFaceDistanceLabel[hidden]{display:none!important}.ncTopoCaption{font-size:9px;color:#8e9aaa;letter-spacing:1.4px;margin-bottom:10px}#ncTopologyPanel p{font-size:11px;color:#8491a2;line-height:1.7;margin:10px 0}#ncTopologyPanel input{box-sizing:border-box;width:100%;margin-top:6px;padding:9px;border:1px solid #b7ccef;border-radius:6px;background:#fbfcfe;font-size:14px;color:#294568}#ncTopologyPanel label{display:block;font-size:11px;color:#7c8c9f}.ncTopoActions{display:flex;gap:6px;margin-top:12px}.ncTopoActions button{flex:1;min-height:40px;border:1px solid #dde4ee;border-radius:6px;background:#fff;color:#607088;cursor:pointer}#ncApplyFace{background:#1769e0;color:white;border-color:#1769e0}#ncApplyFace:disabled{opacity:.4}#ncFaceGizmo{position:fixed;z-index:80;width:38px;height:48px;border:3px solid white;border-radius:8px;background:#1769e0;color:white;font-size:27px;box-shadow:0 2px 10px #1769e044;touch-action:none;cursor:ns-resize;transform:translate(-50%,-110%);user-select:none}
+ #ncTopologyPanel{position:fixed;right:20px;top:326px;width:210px;box-sizing:border-box;padding:16px;background:#fff;border:1px solid #e0e6ee;border-radius:10px;box-shadow:0 4px 20px #24364a0a;z-index:67;font:12px -apple-system,Arial;color:#40516a;direction:ltr}#ncEdgeTools[hidden],#ncApplyEdge[hidden],#ncTopologyPanel[hidden],#ncFaceGizmo[hidden],#ncFaceDistanceLabel[hidden]{display:none!important}.ncTopoCaption{font-size:9px;color:#8e9aaa;letter-spacing:1.4px;margin-bottom:10px}#ncTopologyPanel p{font-size:11px;color:#8491a2;line-height:1.7;margin:10px 0}#ncTopologyPanel input{box-sizing:border-box;width:100%;margin-top:6px;padding:9px;border:1px solid #b7ccef;border-radius:6px;background:#fbfcfe;font-size:14px;color:#294568}#ncTopologyPanel label{display:block;font-size:11px;color:#7c8c9f}.ncTopoActions{display:flex;gap:6px;margin-top:12px}.ncTopoActions button{flex:1;min-height:40px;border:1px solid #dde4ee;border-radius:6px;background:#fff;color:#607088;cursor:pointer}#ncApplyEdge{background:#1769e0;color:white;border-color:#1769e0}#ncEdgeTools button[aria-pressed=true]{background:#e7f0fe;color:#1769e0;border-color:#9cc5ff}#ncApplyFace{background:#1769e0;color:white;border-color:#1769e0}#ncApplyFace:disabled{opacity:.4}#ncFaceGizmo{position:fixed;z-index:80;width:38px;height:48px;border:3px solid white;border-radius:8px;background:#1769e0;color:white;font-size:27px;box-shadow:0 2px 10px #1769e044;touch-action:none;cursor:ns-resize;transform:translate(-50%,-110%);user-select:none}
  @media(max-width:850px){#ncSelectionFilter{top:67px;left:47%}#ncTopologyPanel{right:12px;top:310px;width:180px}}@media(max-width:600px){#ncSelectionFilter{top:63px;left:46%;font-size:10px}#ncSelectionFilter>span{display:none}#ncSelectionFilter button{padding:5px 7px;font-size:10px}#ncTopologyPanel{top:auto;bottom:84px;right:8px;width:165px;padding:12px}}
  `;
   document.head.append(style);
   const $ = (id) => document.getElementById(id), amount = $("ncFaceDistance");
   function dispose(object) {
-    object.geometry?.dispose();
-    object.material?.dispose();
+    object.traverse(child=>{child.geometry?.dispose();child.material?.dispose()});
   }
   function release() {
     if (gesture) {
@@ -50,6 +50,7 @@ function installDirectModeling({ THREE, canvas, camera, controls, scene, context
     release();
     uncache();
     selection = null;
+    $("ncAddEdges").checked=false;
     for (const object of [...layer.children]) {
       layer.remove(object);
       dispose(object);
@@ -94,12 +95,12 @@ function installDirectModeling({ THREE, canvas, camera, controls, scene, context
     g.setAttribute("position", new THREE.Float32BufferAttribute(face.positions, 3));
     g.setIndex(face.indices);
     g.computeVertexNormals();
-    return new THREE.Mesh(g, new THREE.MeshBasicMaterial({ side: THREE.DoubleSide, color: 2526207, transparent: true, opacity: 0.38, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -3 }));
+    return new THREE.Mesh(g, new THREE.MeshBasicMaterial({ side: THREE.DoubleSide, color: 2526207, transparent: true, opacity: 0.62, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -3 }));
   }
   function edgeProxy(edge) {
     const g = new THREE.BufferGeometry();
     g.setAttribute("position", new THREE.Float32BufferAttribute(edge.positions, 3));
-    return new THREE.LineSegments(g, new THREE.LineBasicMaterial({ color: 16752934, depthTest: false, linewidth: 3 }));
+    return new THREE.LineSegments(g, new THREE.LineBasicMaterial({ color: 0x177fe8, depthTest: false, linewidth: 3 }));
   }
   function uncache() {
     if (cache) {
@@ -145,12 +146,14 @@ function installDirectModeling({ THREE, canvas, camera, controls, scene, context
     const face = selection.kind === "face", canPull = face && selection.data.kind === "PLANE";
     panel.hidden = false;
     document.body.dataset.ncSubselection = "true";
+    $("ncEdgeTools").hidden=face;$("ncApplyEdge").hidden=face;$("ncApplyEdge").disabled=applying||!Number.isFinite(Number($("ncEdgeSize").value))||Number($("ncEdgeSize").value)<.01||Number($("ncEdgeSize").value)>10000;$("ncEdgeSize").disabled=applying;
     $("ncTopologyTitle").textContent = (face ? "Face " : "Edge ") + (selection.data.index + 1);
     $("ncTopologyInfo").textContent = selection.data.kind + " · " + Number(face ? selection.data.area : selection.data.length).toFixed(3) + (face ? " mm²" : " mm");
     $("ncFaceDistanceLabel").hidden = !canPull;
     $("ncApplyFace").hidden = !canPull;
     $("ncApplyFace").disabled = applying || !Number.isFinite(Number(amount.value)) || Math.abs(Number(amount.value)) < 0.01;
-    $("ncTopologyHint").textContent = canPull ? "Drag this face or its arrow. Positive adds material; negative removes it." : face ? "Curved face selected. Direct pulling currently requires a planar face." : "Exact CAD edge selected. Orange highlight follows the original curve.";
+    $("ncTopologyHint").textContent = canPull ? "Drag this face or its arrow. Positive adds material; negative removes it." : face ? "Curved face selected. Direct pulling currently requires a planar face." : "Exact CAD edge selected. Choose Fillet or Chamfer, set the size, then Apply.";
+    if(!face&&selection.edges.length>1){$("ncTopologyTitle").textContent=selection.edges.length+" edges";$("ncTopologyInfo").textContent="CAD · "+selection.edges.reduce((sum,e)=>sum+e.length,0).toFixed(3)+" mm"}
     amount.disabled = applying;
     positionHandle();
   }
@@ -167,13 +170,18 @@ function installDirectModeling({ THREE, canvas, camera, controls, scene, context
     handle.style.top = Math.max(125, Math.min(innerHeight - 85, rect.top + (1 - p.y) * rect.height / 2)) + "px";
   }
   function show(pick2, object, key, cached) {
+    let chosen=pick2.kind==='edge'?[pick2.data]:null;
+    if(chosen&&selection?.kind==='edge'&&selection.object===object&&selection.key===key&&($("ncAddEdges").checked||pick2.additive)){
+      chosen=[...selection.edges];const found=chosen.findIndex(e=>e.index===pick2.data.index);if(found<0)chosen.push(pick2.data);else chosen.splice(found,1);if(!chosen.length){clear();return}
+    }
     for (const child of [...layer.children]) {
       layer.remove(child);
       dispose(child);
     }
-    selection = { ...pick2, object, key, brep: cached.data.brep };
+    if(chosen)pick2={...pick2,data:chosen[chosen.length-1]};
+    selection = { ...pick2, object, key, brep: cached.data.brep,edges:chosen };
     amount.value = "0";
-    const visual = pick2.kind === "face" ? proxy(pick2.data) : edgeProxy(pick2.data);
+    const visual = pick2.kind === "face" ? proxy(pick2.data) : new THREE.Group();if(chosen)for(const edge of chosen)visual.add(edgeProxy(edge));
     visual.renderOrder = 20;
     layer.add(visual);
     selection.visual = visual;
@@ -207,7 +215,7 @@ function installDirectModeling({ THREE, canvas, camera, controls, scene, context
         message("نزدیک یک لبهٔ قابل مشاهده بزنید");
         return;
       }
-      show(picked, object, key, cached);
+      picked.additive=!!e.shiftKey;show(picked, object, key, cached);
     } catch (error) {
       if (ticket === epoch) {
         clear();
@@ -221,9 +229,9 @@ function installDirectModeling({ THREE, canvas, camera, controls, scene, context
     render();
   }
   async function apply() {
-    if (!selection || selection.kind !== "face" || selection.data.kind !== "PLANE" || applying) return;
-    const chosen = selection, distance = Number(amount.value);
-    if (!Number.isFinite(distance) || Math.abs(distance) < 0.01 || Math.abs(distance) > 1e4) {
+    if (!selection || (selection.kind === "face" && selection.data.kind !== "PLANE") || applying) return;
+    const isEdge=selection.kind=== "edge",chosen = selection, distance = Number(isEdge?$("ncEdgeSize").value:amount.value);
+    if (!Number.isFinite(distance) || (isEdge?distance<.01:Math.abs(distance)<.01) || Math.abs(distance) > 1e4) {
       message("فاصله باید بین ۰٫۰۱ و ۱۰۰۰۰ میلی‌متر باشد");
       return;
     }
@@ -238,18 +246,17 @@ function installDirectModeling({ THREE, canvas, camera, controls, scene, context
     setBusy(true);
     render();
     try {
-      const recipe = { type: "facePull", brep: chosen.brep, faceIndex: chosen.data.index, distance };
+      const recipe = isEdge?{type:"edgeFinish",brep:chosen.brep,edgeIndices:chosen.edges.map(e=>e.index),mode:edgeMode,amount:distance}:{ type: "facePull", brep: chosen.brep, faceIndex: chosen.data.index, distance };
       const data = await (await request("/evaluate", recipe)).json();
       if (ticket !== epoch || !current(chosen.object, chosen.key)) return;
       commit(chosen.object, data, recipe);
       uncache();
       clear();
-      message("وجه با هندسهٔ دقیق جابجا شد؛ Undo برای بازگشت در دسترس است");
+      message(isEdge?"اصلاح دقیق لبه انجام شد؛ Undo برای بازگشت در دسترس است":"وجه با هندسهٔ دقیق جابجا شد؛ Undo برای بازگشت در دسترس است");
     } catch (error) {
       if (ticket === epoch) {
-        amount.value = "0";
-        ghost();
-        message("جابجایی انجام نشد؛ قطعه حفظ شد: " + error.message);
+        if(!isEdge){amount.value = "0";ghost()}
+        message((isEdge?"اصلاح لبه انجام نشد؛ قطعه حفظ شد: ":"جابجایی انجام نشد؛ قطعه حفظ شد: ") + error.message);
       }
     } finally {
       applying = false;
@@ -288,7 +295,9 @@ function installDirectModeling({ THREE, canvas, camera, controls, scene, context
     enterSelect();
   });
   amount.addEventListener("input", ghost);
-  $("ncApplyFace").onclick = apply;
+  $("ncApplyFace").onclick = apply;$("ncApplyEdge").onclick=apply;
+  for(const mode of ['fillet','chamfer'])$(mode==='fillet'?'ncEdgeFillet':'ncEdgeChamfer').onclick=()=>{edgeMode=mode;$("ncEdgeFillet").setAttribute('aria-pressed',String(mode==='fillet'));$("ncEdgeChamfer").setAttribute('aria-pressed',String(mode==='chamfer'));$("ncEdgeSizeLabel").firstChild.textContent=mode==='fillet'?'Radius · mm':'Distance · mm';render()};
+  $("ncEdgeSize").addEventListener('input',render);
   $("ncCancelFace").onclick = () => {
     uncache();
     clear();
@@ -311,7 +320,7 @@ function installDirectModeling({ THREE, canvas, camera, controls, scene, context
         return;
       }
     }
-    pick({ clientX: e.clientX, clientY: e.clientY });
+    pick({ clientX: e.clientX, clientY: e.clientY,shiftKey:e.shiftKey });
     e.preventDefault();
     e.stopImmediatePropagation();
   }, true);
@@ -337,7 +346,7 @@ function installDirectModeling({ THREE, canvas, camera, controls, scene, context
     }
     const touch = touches.get(e.pointerId);
     touches.delete(e.pointerId);
-    if (touch && !touch.multi && !touch.moved && context().enabled && !regionAt(e) && filter !== "body") pick({ clientX: e.clientX, clientY: e.clientY });
+    if (touch && !touch.multi && !touch.moved && context().enabled && !regionAt(e) && filter !== "body") pick({ clientX: e.clientX, clientY: e.clientY,shiftKey:e.shiftKey });
   }, true);
   for (const type of ["pointercancel", "lostpointercapture"]) document.addEventListener(type, (e) => {
     touches.delete(e.pointerId);

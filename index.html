@@ -318,6 +318,8 @@ window.addEventListener('unhandledrejection', function(e) {
 import * as THREE from 'three';
 import {installWorkspaceUI} from './workspace-ui.mjs';
 import {installDirectModeling} from './direct-modeling.mjs';
+import {installStudioRendering} from './studio-rendering.mjs';
+let ncStudio=null;
 let ncDirect=null;
 let ncWorkspace=null;
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
@@ -422,7 +424,7 @@ function select(obj){if(booleanPending && obj && obj!==booleanPending.base){perf
 function refreshList(){document.querySelector('#count').textContent=items.length;const list=document.querySelector('#objectList');list.innerHTML='';items.forEach(o=>{const el=document.createElement('div');el.className='treeitem'+(selected===o?' selected':'');const nm=document.createElement('span');nm.textContent='◇ '+o.name;const typ=document.createElement('small');typ.textContent=o.type;el.append(nm,typ);el.onclick=()=>select(o);list.appendChild(el);});}
 function rebuild(o){if(o.type==='booleanMesh'){toast('برای تغییر ابعاد این نتیجه، از ابزار Scale استفاده کنید');return}const old=o.mesh;world.remove(old);old.geometry.dispose();const mesh=new THREE.Mesh(geometry(o.type,o.dims),selected===o?selectedMat:mat.clone());mesh.position.copy(old.position);mesh.rotation.copy(old.rotation);mesh.scale.copy(old.scale);mesh.userData.objectId=o.id;mesh.castShadow=true;mesh.receiveShadow=true;o.mesh=mesh;world.add(mesh);}
 function resize(){const w=canvas.clientWidth,h=canvas.clientHeight;if(!w||!h)return;renderer.setSize(w,h,false);camera.aspect=w/h;camera.updateProjectionMatrix();}
-function animate(){requestAnimationFrame(animate);controls.update();renderer.render(scene,camera)}animate();new ResizeObserver(resize).observe(canvas);
+function animate(time=performance.now()){requestAnimationFrame(animate);controls.update();ncStudio?.update();if(!ncStudio||ncStudio.needsRender(time))renderer.render(scene,camera)}animate();new ResizeObserver(resize).observe(canvas);
 let tapStart=null;canvas.addEventListener('pointerdown',e=>{if(e.pointerType==='touch'){tapStart={x:e.clientX,y:e.clientY,t:Date.now()};return;}selectAt(e);});canvas.addEventListener('pointerup',e=>{if(e.pointerType==='touch'&&tapStart&&Math.hypot(e.clientX-tapStart.x,e.clientY-tapStart.y)<12&&Date.now()-tapStart.t<350)selectAt(e);tapStart=null;});function selectAt(e){if(gizmoMode||e.button!==0)return;const r=canvas.getBoundingClientRect();pointer.x=((e.clientX-r.left)/r.width)*2-1;pointer.y=-((e.clientY-r.top)/r.height)*2+1;raycaster.setFromCamera(pointer,camera);const hits=raycaster.intersectObjects(items.map(o=>o.mesh),false);if(subshapeMode){pickSubshape(hits);return} if(hits.length){const id=hits[0].object.userData.objectId;select(items.find(o=>o.id===id)||null)}else select(null)}
 document.querySelector('#panelsBtn').onclick=()=>{document.querySelector('.workspace').classList.toggle('panels-open');resize()};
 document.querySelector('#openBtn').onclick=()=>document.querySelector('#fileInput').click();
@@ -1882,10 +1884,12 @@ ncDirect=installDirectModeling({THREE,canvas,camera,controls,scene,
  request:ncRequest,setBusy:value=>{ncBusy=value;ncHistoryUI()},message:ncMessage,
  commit:(previous,data,recipe)=>{
   const index=items.indexOf(previous);if(index<0)throw Error('قطعه تغییر کرده است');
-  const next=ncExactObject(data,recipe,previous.name,previous.id);next.operations=[...(previous.operations||[]),{kind:'facePull',faceIndex:recipe.faceIndex,distance:recipe.distance}];
+  const next=ncExactObject(data,recipe,previous.name,previous.id);next.operations=[...(previous.operations||[]),{kind:recipe.type,faceIndex:recipe.faceIndex,distance:recipe.distance,edgeIndices:recipe.edgeIndices,mode:recipe.mode,amount:recipe.amount}];
   snapshot();world.remove(previous.mesh);previous.mesh.geometry.dispose();previous.mesh.material.dispose();items[index]=next;world.add(next.mesh);select(next);refreshList();queueMicrotask(ncRecoverySave);
  }
 });
+
+ncStudio=installStudioRendering({THREE,scene,renderer,grid,mat,selectedMat,getItems:()=>items,getSelected:()=>selected});
 
 </script>
 <input type="file" id="ncCADFile" accept=".step,.stp,.iges,.igs" hidden><input type="file" id="ncMeshFile" accept=".stl,.obj,.3mf" hidden><div id="ncTop"><button class="ncBtn" id="ncHome">⌂</button><span class="ncTitle">NiliCAD v4.2.0 · <span id="ncProject">Untitled Project</span></span><button class="ncBtn" id="ncUndo" title="بازگشت Undo" aria-label="Undo" disabled>↶</button><button class="ncBtn" id="ncRedo" title="تکرار Redo" aria-label="Redo" disabled>↷</button><button class="ncBtn" id="ncMenu">•••</button></div>
