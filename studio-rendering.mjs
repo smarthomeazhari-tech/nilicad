@@ -12,9 +12,9 @@ export function installStudioRendering({THREE,scene,renderer,grid,mat,selectedMa
  grid.material.color.set(0xcbd2dc);grid.material.opacity=.28;grid.material.toneMapped=false;
  const helpers=new THREE.Group();helpers.name='Display helpers';helpers.userData.displayOnly=true;scene.add(helpers);
  const floor=new THREE.Mesh(new THREE.PlaneGeometry(1,1),new THREE.ShadowMaterial({color:0x66788c,opacity:.17,depthWrite:false}));floor.rotation.x=-Math.PI/2;floor.receiveShadow=true;floor.userData.displayOnly=true;helpers.add(floor);
- const outlines=new Map();let lastScene='',activeUntil=performance.now()+1500,lastRender=0;
+ const outlines=new Map();let lastScene=null,activeUntil=performance.now()+1500,lastRender=0;
  const wake=()=>{activeUntil=performance.now()+800};
- for(const type of ['pointerdown','pointerup','pointermove','wheel','keydown','input','resize'])window.addEventListener(type,wake,{passive:true});
+ for(const type of ['pointerdown','pointerup','pointermove','wheel','keydown','input','resize'])window.addEventListener(type,wake,{passive:true,capture:true});
  renderer.domElement.addEventListener('webglcontextrestored',wake);
 
  function remove(mesh,line){helpers.remove(line);line.geometry.dispose();line.material.dispose();outlines.delete(mesh)}
