@@ -178,6 +178,7 @@ function installDirectModeling({ THREE, canvas, camera, controls, scene, context
       layer.remove(child);
       dispose(child);
     }
+    if(chosen)pick2={...pick2,data:chosen[chosen.length-1]};
     selection = { ...pick2, object, key, brep: cached.data.brep,edges:chosen };
     amount.value = "0";
     const visual = pick2.kind === "face" ? proxy(pick2.data) : new THREE.Group();if(chosen)for(const edge of chosen)visual.add(edgeProxy(edge));
