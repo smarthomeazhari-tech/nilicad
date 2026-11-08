@@ -178,7 +178,7 @@ function installDirectModeling({ THREE, canvas, camera, controls, scene, context
     layer.add(visual);
     selection.visual = visual;
     render();
-    message(pick2.kind === "face" ? "وجه CAD انتخاب شد؛ برای تغییر حجم فلش را بکشید" : "لبه CAD انتخاب شد");
+    message(pick2.kind === "face" ? (pick2.data.kind === "PLANE" ? "وجه CAD انتخاب شد؛ برای تغییر حجم فلش را بکشید" : "وجه منحنی انتخاب شد؛ مساحت در پنل نمایش داده می‌شود") : "لبه CAD انتخاب شد");
   }
   async function pick(e) {
     const hit = bodyHit(e) || nearBody(e);
