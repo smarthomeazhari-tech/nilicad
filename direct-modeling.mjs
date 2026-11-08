@@ -9,7 +9,7 @@ function installDirectModeling({ THREE, canvas, camera, controls, scene, context
   bar.id = "ncSelectionFilter";
   bar.setAttribute("role", "group");
   bar.setAttribute("aria-label", "Selection filter");
-  bar.innerHTML = "<span>Select</span>" + ["auto", "body", "face", "edge"].map((kind) => `<button id="ncPick${kind[0].toUpperCase() + kind.slice(1)}" data-pick="${kind}" aria-pressed="${kind === filter}">${kind[0].toUpperCase() + kind.slice(1)}</button>`).join("");
+  bar.innerHTML = "<span>Select</span>" + ["auto", "body", "face", "edge", "point"].map((kind) => `<button id="ncPick${kind[0].toUpperCase() + kind.slice(1)}" data-pick="${kind}" aria-pressed="${kind === filter}">${kind[0].toUpperCase() + kind.slice(1)}</button>`).join("");
   document.body.append(bar);
   const panel = document.createElement("aside");
   panel.id = "ncTopologyPanel";
@@ -304,7 +304,7 @@ function installDirectModeling({ THREE, canvas, camera, controls, scene, context
   };
   handle.addEventListener("pointerdown", startDrag);
   document.addEventListener("pointerdown", (e) => {
-    if (e.target !== canvas || !context().enabled || e.button !== 0) return;
+    if (e.target !== canvas || !context().enabled || e.button !== 0 || filter==='point') return;
     if (e.pointerType === "touch") {
       for (const t of touches.values()) t.multi = true;
       touches.set(e.pointerId, { x: e.clientX, y: e.clientY, multi: touches.size > 0 });
@@ -345,7 +345,7 @@ function installDirectModeling({ THREE, canvas, camera, controls, scene, context
     }
     const touch = touches.get(e.pointerId);
     touches.delete(e.pointerId);
-    if (touch && !touch.multi && !touch.moved && context().enabled && !regionAt(e) && filter !== "body") pick({ clientX: e.clientX, clientY: e.clientY,shiftKey:e.shiftKey });
+    if (touch && !touch.multi && !touch.moved && context().enabled && !regionAt(e) && filter !== "body" && filter !== "point") pick({ clientX: e.clientX, clientY: e.clientY,shiftKey:e.shiftKey });
   }, true);
   for (const type of ["pointercancel", "lostpointercapture"]) document.addEventListener(type, (e) => {
     touches.delete(e.pointerId);
