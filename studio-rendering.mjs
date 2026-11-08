@@ -15,7 +15,7 @@ export function installStudioRendering({THREE,scene,renderer,grid,mat,selectedMa
  const outlines=new Map();let lastScene=null,activeUntil=performance.now()+1500,lastRender=0;
  const wake=()=>{activeUntil=performance.now()+800};
  for(const type of ['pointerdown','pointerup','pointermove','wheel','keydown','input','resize'])window.addEventListener(type,wake,{passive:true,capture:true});
- renderer.domElement.addEventListener('webglcontextrestored',wake);
+ renderer.domElement.addEventListener('webglcontextrestored',()=>{renderer.shadowMap.needsUpdate=true;key.shadow.needsUpdate=true;wake()});
 
  function remove(mesh,line){helpers.remove(line);line.geometry.dispose();line.material.dispose();outlines.delete(mesh)}
  function sync(){
