@@ -92,3 +92,14 @@ orbits. See workspace.md for interactions and remaining feature boundaries.
 Shipping-build workflows, exact volume/bounds tests, protected asset access and
 recovery are covered in Chromium/WebKit and Windows Chromium CI. These automated
 checks do not replace physical iPad/Pencil or OS Files acceptance in issue #6.
+
+## Exact subshape interaction (2026-11-08)
+
+`direct-modeling.mjs` adds the Auto/Body/Face/Edge selection strip, OCCT subshape
+pick proxies, area/length inspection and direct planar face gestures. The browser
+kernel returns a canonical B-Rep snapshot for topology indices and evaluates
+self-contained `facePull` recipes before replacing a document body. History,
+recovery and CAD export retain exact geometry. Cancel/stale-result guards prevent
+late worker results from changing the original. The legacy box-only subshape
+panel is not used by the new workspace. See direct-modeling.md for behavior,
+validation and the bounded planar-footprint operation's limitations.
