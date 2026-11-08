@@ -32,7 +32,7 @@ export function installStudioRendering({THREE,scene,renderer,grid,mat,selectedMa
   if(items.length){const center=box.getCenter(new THREE.Vector3()),size=box.getSize(new THREE.Vector3()),span=Math.max(80,size.length());floor.position.set(center.x,box.min.y-.04,center.z);floor.scale.setScalar(span*5);key.position.copy(center).add(new THREE.Vector3(-1,2,1.5).multiplyScalar(span));key.target.position.copy(center);Object.assign(key.shadow.camera,{left:-span,right:span,top:span,bottom:-span,near:.1,far:span*8});key.shadow.camera.updateProjectionMatrix()}
  }
  function update(){
-  const selected=getSelected(),sub=document.body.dataset.ncSubselection==='true';selectedMat.color.set(sub?0xb9c1ca:0x8ec9f1);
+  const selected=getSelected(),sub=(document.body.dataset.ncSubselection==='true'||document.body.dataset.ncPointselection==='true');selectedMat.color.set(sub?0xb9c1ca:0x8ec9f1);
   for(const [mesh,line] of outlines){mesh.updateMatrixWorld(true);line.matrix.copy(mesh.matrixWorld);line.visible=mesh.visible&&!!mesh.parent;const active=selected?.mesh===mesh&&!sub;line.material.color.set(active?0x338add:0x536171);line.material.opacity=active?.65:.3}
  }
  sync();const timer=setInterval(sync,200);return {update,needsRender(time){if(time-lastRender<(time<activeUntil?1000/45:250))return false;lastRender=time;return true},destroy(){clearInterval(timer);for(const [mesh,line] of outlines)remove(mesh,line);floor.geometry.dispose();floor.material.dispose();scene.remove(helpers,key,key.target,fill)}};

@@ -1,4 +1,5 @@
 import * as r from 'replicad';
+import {createPathTools} from './path-tools.mjs';
 
 export function createKernel(oc) {
  r.setOC(oc);
@@ -8,6 +9,7 @@ export function createKernel(oc) {
  const point=p=>[finite(p.x),0,finite(p.y)];
  const valid=shape=>{const check=own(new oc.BRepCheck_Analyzer(shape.wrapped,true));if(shape.isNull||!check.IsValid())throw Error('هندسه OCCT معتبر نیست');return shape};
  const load=data=>{if(typeof data!=='string'||data.length>20000000)throw Error('داده B-Rep نامعتبر است');return valid(own(r.deserializeShape(data)))};
+ const pathTools=createPathTools({r,oc,own,load,finite});
  function face(node){
   if(node.brep){const shape=load(node.brep);const faces=shape instanceof r.Face?[shape]:shape.faces.map(own);if(faces.length!==1)throw Error('یک سطح مسطح لازم است');const f=faces[0];if(f.geomType!=='PLANE')throw Error('سطح باید مسطح باشد');return f}
   let edges;
@@ -47,7 +49,7 @@ export function createKernel(oc) {
  }
  function edgeFinish(node){
   const shape=load(node.brep),edges=shape.edges.map(own),indices=node.edgeIndices,amount=finite(node.amount);
-  if(!['fillet','chamfer'].includes(node.mode))throw Error('نوع اصلاح لبه معتبر نیست');
+  if(!['fillet','chamfer','sketch-paths','path-point'].includes(node.mode))throw Error('نوع اصلاح لبه معتبر نیست');
   if(!Array.isArray(indices)||!indices.length||indices.length>100||new Set(indices).size!==indices.length||indices.some(i=>!Number.isInteger(i)||i<0||i>=edges.length))throw Error('شناسه لبه معتبر نیست');
   if(amount<.01||amount>10000)throw Error('شعاع یا اندازه پخ باید بین ۰٫۰۱ و ۱۰۰۰۰ میلی‌متر باشد');
   const chosen=indices.map(i=>edges[i]);
@@ -85,10 +87,12 @@ export function createKernel(oc) {
  async function handle(path,payload){
   owned=[];
   try{
-   if(path==='/health')return {ok:true,kernel:'Open CASCADE WebAssembly',mode:'browser',features:['regions','extrude','boolean','step','topology','planar-face-pull','fillet','chamfer']};
+   if(path==='/health')return {ok:true,kernel:'Open CASCADE WebAssembly',mode:'browser',features:['regions','extrude','boolean','step','topology','planar-face-pull','fillet','chamfer','sketch-paths','path-point']};
    if(path==='/evaluate')return result(make(payload));
    if(path==='/regions')return split(payload.profiles);
    if(path==='/topology')return topology(payload);
+   if(path==='/paths')return pathTools.paths(payload);
+   if(path==='/path-point')return pathTools.inspect(payload);
    if(path==='/export-step'){
     if(!Array.isArray(payload.objects)||!payload.objects.length||payload.objects.length>100)throw Error('بین ۱ و ۱۰۰ قطعه لازم است');
     const shapes=payload.objects.map(node=>({shape:own(make(node).rotate(90,[0,0,0],[1,0,0]))}));const blob=r.exportSTEP(shapes,{unit:'MM',modelUnit:'MM'});return {binary:await blob.arrayBuffer(),type:'model/step'};
