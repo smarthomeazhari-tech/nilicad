@@ -28,7 +28,8 @@ export function createKernel(oc) {
   if(node.op==='transform')return transform(make(node.shape,level+1),node.transform);
   if(node.op){const a=make(node.left,level+1),b=make(node.right,level+1);if(node.op==='union')return own(a.fuse(b));if(node.op==='subtract')return own(a.cut(b));if(node.op==='intersect')return own(a.intersect(b));throw Error('عملیات پشتیبانی نمی‌شود')}
   let shape;
-  if(node.type==='facePull')shape=planarPull(node);
+  if(node.type==='edgeFinish')shape=edgeFinish(node);
+  else if(node.type==='facePull')shape=planarPull(node);
   else if(node.type==='brep')shape=load(node.brep);
   else if(node.type==='profile')shape=extrude(face(node),node.depth);
   else {
@@ -43,6 +44,16 @@ export function createKernel(oc) {
    }
   }
   return node.transform?transform(shape,node.transform):shape;
+ }
+ function edgeFinish(node){
+  const shape=load(node.brep),edges=shape.edges.map(own),indices=node.edgeIndices,amount=finite(node.amount);
+  if(!['fillet','chamfer'].includes(node.mode))throw Error('نوع اصلاح لبه معتبر نیست');
+  if(!Array.isArray(indices)||!indices.length||indices.length>100||new Set(indices).size!==indices.length||indices.some(i=>!Number.isInteger(i)||i<0||i>=edges.length))throw Error('شناسه لبه معتبر نیست');
+  if(amount<.01||amount>10000)throw Error('شعاع یا اندازه پخ باید بین ۰٫۰۱ و ۱۰۰۰۰ میلی‌متر باشد');
+  const chosen=indices.map(i=>edges[i]);
+  const next=valid(own(shape[node.mode](edge=>chosen.some(e=>e.isSame(edge))?amount:null)));
+  if(!next.solids.map(own).length||Math.abs(r.measureVolume(next))<1e-8)throw Error('اصلاح لبه حجم معتبر ایجاد نکرد');
+  return next;
  }
  function planarPull(node){
   const shape=load(node.brep),faces=shape.faces.map(own),index=node.faceIndex,distance=finite(node.distance);
@@ -74,7 +85,7 @@ export function createKernel(oc) {
  async function handle(path,payload){
   owned=[];
   try{
-   if(path==='/health')return {ok:true,kernel:'Open CASCADE WebAssembly',mode:'browser',features:['regions','extrude','boolean','step','topology','planar-face-pull']};
+   if(path==='/health')return {ok:true,kernel:'Open CASCADE WebAssembly',mode:'browser',features:['regions','extrude','boolean','step','topology','planar-face-pull','fillet','chamfer']};
    if(path==='/evaluate')return result(make(payload));
    if(path==='/regions')return split(payload.profiles);
    if(path==='/topology')return topology(payload);
