@@ -64,3 +64,21 @@ the document, and draws a new closed profile after each interrupted input.
 The generated distribution retains the upstream LGPL-2.1 and MIT license files,
 source/build links and bundle legal notices. WASM is copied unmodified from its
 pinned npm package. `npm ci && npm run build:engine` reproduces it.
+
+## Exact topology and planar face pulling
+
+`/topology` takes an exact recipe and returns a canonical B-Rep snapshot plus
+indexed CAD faces (mesh, surface kind, area, mass center and oriented unit normal)
+and CAD edges (curve kind, exact length and display line segments). Faces and
+edges are OCCT subshapes; tessellation boundaries are not selectable CAD edges.
+Indices are valid only with the immutable returned B-Rep, not across edits.
+Queries reject more than 2,000 faces or 4,000 edges.
+
+`/evaluate` accepts `{type:'facePull',brep,faceIndex,distance}`. For a planar face,
+a prism of its full bounded face, including holes, adds material along its outward
+normal for positive distance or removes material inward for negative distance.
+The result is validated with OCCT; zero/oversized values, curved faces, invalid
+indices and complete collapse fail. The recipe is self-contained for project
+history, further transforms and STEP/IGES exchange. This is a planar face-footprint
+push/pull, not a general adjacent-surface extension/offset solver for curved or
+tapered models. The original document is committed only after a valid result.
