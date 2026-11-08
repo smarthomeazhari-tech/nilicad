@@ -82,3 +82,12 @@ indices and complete collapse fail. The recipe is self-contained for project
 history, further transforms and STEP/IGES exchange. This is a planar face-footprint
 push/pull, not a general adjacent-surface extension/offset solver for curved or
 tapered models. The original document is committed only after a valid result.
+
+## Edge finishing
+
+`{type:'edgeFinish',brep,edgeIndices,mode,amount}` evaluates exact OCCT Fillet or
+symmetric equal-distance Chamfer on the selected snapshot edges. Modes are
+`fillet`/`chamfer`; amount is a positive radius/distance in mm (0.01–10000).
+One to 100 unique valid indices are accepted. OCCT determines geometrical
+feasibility; invalid/oversized blends fail instead of changing a display mesh.
+The self-contained recipe supports transforms, history and CAD exchange.
