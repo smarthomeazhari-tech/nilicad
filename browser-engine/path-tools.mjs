@@ -1,4 +1,4 @@
-function createPathTools({ r, oc, own, load, finite }) {
+function createPathTools({ r, oc, own, load, finite, ellipseEdge }) {
   const xyz = (p) => [p.X(), p.Y(), p.Z()], dot = (a, b) => a.reduce((s, v, i) => s + v * b[i], 0), cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]], norm = (a) => Math.hypot(...a);
   const point = (p) => {
     if (!Array.isArray(p) || p.length !== 3 || p.some((v) => typeof v !== "number" || !Number.isFinite(v))) throw Error("مختصات نقطه معتبر نیست");
@@ -10,6 +10,7 @@ function createPathTools({ r, oc, own, load, finite }) {
     for (const [profileIndex, profile] of profiles.entries()) {
       let edges = [];
       if (profile.brep) edges = load(profile.brep).edges.map(own);
+      else if (profile.ellipse) edges = [ellipseEdge(profile.ellipse)];
       else if (profile.circle) {
         const c = profile.circle;
         const radius = finite(c.r);

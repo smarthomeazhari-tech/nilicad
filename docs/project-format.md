@@ -34,3 +34,7 @@ Malformed records and denied storage never replace a valid document or prevent e
 ## Regular polygon construction
 
 The optional v5 `polygonTool` field preserves side count, circumradius, angle and center for the next construction. A pending two-tap polygon uses `sketchDraft.tool = "polygon"` and `rectStart`. Completed polygons are ordinary exact line profiles. See [polygon-sketch.md](polygon-sketch.md) for limits and validation.
+
+## Ellipse construction
+
+The optional v5 `ellipseTool` field stores `{rx, ry, angle, center: {x, y}}` in mm/degrees for the next construction. Center y is sketch Z; rx and ry are semi-axes. Pending center/corner construction uses draft tool `ellipse` and `rectStart`. Completed ellipses use canonical face B-Reps, preserving analytic geometry. Older documents default to 25/15 mm semi-axes. See [ellipse-sketch.md](ellipse-sketch.md).
