@@ -316,6 +316,8 @@ window.addEventListener('unhandledrejection', function(e) {
 </div>
 <script type="module">
 import * as THREE from 'three';
+import {installPolygonTool,regularPolygon,polygonSettings,polygonDefaults} from './polygon-tool.mjs';
+let ncPolygon=null;
 import {installWorkspaceUI} from './workspace-ui.mjs';
 import {installDirectModeling} from './direct-modeling.mjs';
 import {installStudioRendering} from './studio-rendering.mjs';
@@ -365,10 +367,10 @@ const raycaster=new THREE.Raycaster(),pointer=new THREE.Vector2();
 function toast(msg){const t=document.querySelector('#toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),1800)}
 let redoStack=[];
 function state(){return items.map(o=>({id:o.id,name:o.name,type:o.type,dims:{...o.dims},pos:o.mesh.position.toArray(),rot:o.mesh.rotation.toArray().slice(0,3),scale:o.mesh.scale.toArray(),plane:o.plane||'XY',operations:o.operations||[],exactRecipe:o.exactRecipe||null,exactBaseMatrix:o.exactBaseMatrix||null,featureMaster:o.featureMaster||null,sketch:o.sketch||null,geometryJSON:o.type==='booleanMesh'?o.mesh.geometry.toJSON():null}))}
-function ncUndoState(){const project=ncProjectData();return {objects:project.objects,regions:project.sketchRegions,draft:project.sketchDraft}}
+function ncUndoState(){const project=ncProjectData();return {objects:project.objects,regions:project.sketchRegions,draft:project.sketchDraft,polygon:project.polygonTool}}
 function ncHistoryUI(){document.getElementById('ncUndo').disabled=ncBusy||!history.length;document.getElementById('ncRedo').disabled=ncBusy||!redoStack.length}
 function snapshot(){history.push(ncUndoState());redoStack=[];if(history.length>30)history.shift();ncHistoryUI()}
-function restore(s){if(!Array.isArray(s)){const objects=s.objects.map(o=>({...o,dimensions:o.dims,position:o.pos,rotation:o.rot}));ncLoadProject({format:'NiliCAD-Web',version:'5.0',units:'mm',objects,sketchRegions:s.regions||[],sketchDraft:s.draft||null},false);return}gizmo.detach();items.forEach(o=>{world.remove(o.mesh);o.mesh.geometry.dispose()});items=s.map(d=>{const mesh=new THREE.Mesh(d.type==='booleanMesh'&&d.geometryJSON?new THREE.BufferGeometryLoader().parse(d.geometryJSON):geometry(d.type,d.dims),mat.clone());mesh.position.fromArray(d.pos);if(d.rot)mesh.rotation.set(...d.rot);if(d.scale)mesh.scale.fromArray(d.scale);mesh.userData.objectId=d.id;if(!d.rot){if(d.plane==='XZ')mesh.rotation.x=Math.PI/2;if(d.plane==='YZ')mesh.rotation.z=-Math.PI/2;}world.add(mesh);return {...d,mesh,exactRecipe:d.exactRecipe||null,exactBaseMatrix:d.exactBaseMatrix||null,featureMaster:d.featureMaster||null}});nextId=Math.max(1,...items.map(o=>o.id+1));select(null);refreshList()}
+function restore(s){if(!Array.isArray(s)){const objects=s.objects.map(o=>({...o,dimensions:o.dims,position:o.pos,rotation:o.rot}));ncLoadProject({format:'NiliCAD-Web',version:'5.0',units:'mm',objects,sketchRegions:s.regions||[],sketchDraft:s.draft||null,polygonTool:s.polygon||polygonDefaults},false);return}gizmo.detach();items.forEach(o=>{world.remove(o.mesh);o.mesh.geometry.dispose()});items=s.map(d=>{const mesh=new THREE.Mesh(d.type==='booleanMesh'&&d.geometryJSON?new THREE.BufferGeometryLoader().parse(d.geometryJSON):geometry(d.type,d.dims),mat.clone());mesh.position.fromArray(d.pos);if(d.rot)mesh.rotation.set(...d.rot);if(d.scale)mesh.scale.fromArray(d.scale);mesh.userData.objectId=d.id;if(!d.rot){if(d.plane==='XZ')mesh.rotation.x=Math.PI/2;if(d.plane==='YZ')mesh.rotation.z=-Math.PI/2;}world.add(mesh);return {...d,mesh,exactRecipe:d.exactRecipe||null,exactBaseMatrix:d.exactBaseMatrix||null,featureMaster:d.featureMaster||null}});nextId=Math.max(1,...items.map(o=>o.id+1));select(null);refreshList()}
 
 function profileGeometry(type,d){
  const w=d.x,h=d.y,depth=d.z,r=Math.min(d.r||Math.min(w,h)*.12,w*.45,h*.45);
@@ -449,7 +451,7 @@ document.querySelector('#gridBtn').onclick=e=>{grid.visible=!grid.visible;e.curr
 document.querySelector('#fitBtn').onclick=()=>{if(!items.length){camera.position.set(170,145,190);controls.target.set(0,20,0);return}const box=new THREE.Box3().setFromObject(world);const center=box.getCenter(new THREE.Vector3());controls.target.copy(center);camera.position.copy(center.clone().add(new THREE.Vector3(1.3,1.05,1.5).multiplyScalar(Math.max(box.getSize(new THREE.Vector3()).length(),100)*1.4)));camera.updateProjectionMatrix()};
 function setView(v){const t=controls.target;if(v==='top')camera.position.set(t.x,t.y+260,t.z+.001);if(v==='front')camera.position.set(t.x,t.y,t.z+280);if(v==='right')camera.position.set(t.x+280,t.y,t.z+.001);if(v==='iso')camera.position.set(t.x+170,t.y+145,t.z+190);camera.lookAt(t);controls.update()}
 document.querySelector('#topBtn').onclick=()=>setView('top');document.querySelector('#frontBtn').onclick=()=>setView('front');document.querySelector('#isoBtn').onclick=()=>setView('iso');
-document.querySelector('#newBtn').onclick=()=>{if(ncBusy)return;if(!confirm('پروژه فعلی پاک شود؟'))return;cancelBoolean();stopMove();endDraft();gizmo.detach();gizmoMode=null;++ncPreviewEpoch;items.forEach(o=>{world.remove(o.mesh);o.mesh.geometry.dispose()});items=[];select(null);refreshList();nextId=1;history=[];redoStack=[];ncHistoryUI();ncSetSketchState(false);ncClearRegions();ncClearVisual();skClosed=false;skCircle=null;skSegments=[];skPoints=[];skArcPoints=[];skPull=false;nc.rectStart=null;nc.drag=null;nc.mode='select';ncPull.style.display='none';document.getElementById('ncConfirm').style.display='none';toast('پروژه جدید آماده است')};
+document.querySelector('#newBtn').onclick=()=>{if(ncBusy)return;if(!confirm('پروژه فعلی پاک شود؟'))return;ncPolygon?.set(polygonDefaults);ncPolygon?.show(false);cancelBoolean();stopMove();endDraft();gizmo.detach();gizmoMode=null;++ncPreviewEpoch;items.forEach(o=>{world.remove(o.mesh);o.mesh.geometry.dispose()});items=[];select(null);refreshList();nextId=1;history=[];redoStack=[];ncHistoryUI();ncSetSketchState(false);ncClearRegions();ncClearVisual();skClosed=false;skCircle=null;skSegments=[];skPoints=[];skArcPoints=[];skPull=false;nc.rectStart=null;nc.drag=null;nc.mode='select';ncPull.style.display='none';document.getElementById('ncConfirm').style.display='none';toast('پروژه جدید آماده است')};
 document.querySelector('#undoBtn').onclick=()=>{if(ncBusy)return;if(!history.length){toast('عملیاتی برای بازگشت نیست');return}redoStack.push(ncUndoState());restore(history.pop());ncHistoryUI();toast('Undo انجام شد')};
 document.querySelector('#redoBtn').onclick=()=>{if(ncBusy)return;if(!redoStack.length){toast('عملیاتی برای تکرار نیست');return}history.push(ncUndoState());restore(redoStack.pop());ncHistoryUI();toast('Redo انجام شد')};
 document.querySelector('#saveBtn').onclick=()=>{const data={format:'NiliCAD-Web',version:'2.4',units:'mm',sketchRegions:ncRegions.map(r=>({segments:r.segments,points:r.points,circle:r.circle})),objects:items.map(o=>({id:o.id,name:o.name,type:o.type,dimensions:o.type==='booleanMesh'?{...o.dims,geometryJSON:o.mesh.geometry.toJSON()}:o.dims,plane:o.plane||'XY',operations:o.operations||[],exactRecipe:o.exactRecipe||null,exactBaseMatrix:o.exactBaseMatrix||null,featureMaster:o.featureMaster||null,sketch:o.sketch||null,position:o.mesh.position.toArray(),rotation:o.mesh.rotation.toArray().slice(0,3),scale:o.mesh.scale.toArray()}))};download(new Blob([JSON.stringify(data,null,2)],{type:'application/json'}),'project.nilicad.json');toast('فایل پروژه ذخیره شد')};
@@ -1506,16 +1508,16 @@ function ncStroke(pts,color=0x1577cf){
  nc.group.add(stroke);
 }
 function ncCirclePoints(c,r){return Array.from({length:97},(_,i)=>({x:c.x+Math.cos(i*Math.PI*2/96)*r,y:c.y+Math.sin(i*Math.PI*2/96)*r}))}
-function ncDraw(){ncClearVisual();for(const seg of skSegments){if(seg.kind==='line')ncStroke([seg.a,seg.b]);else{const ar=skArcShape(seg.a,seg.m,seg.b);if(ar)ncStroke(Array.from({length:49},(_,i)=>({x:ar.cx+ar.r*Math.cos(ar.t0+ar.span*i/48),y:ar.cy+ar.r*Math.sin(ar.t0+ar.span*i/48)})))}}if(skCircle)ncStroke(ncCirclePoints(skCircle.center,skCircle.r));for(const p of [...skPoints,...skArcPoints]){const dot=new THREE.Mesh(new THREE.SphereGeometry(1.05,14,10),new THREE.MeshBasicMaterial({color:0xf0a326}));dot.position.copy(nc3(p,.2));nc.group.add(dot)}if(skClosed||skCircle){try{const sh=skShape();if(sh){const geo=new THREE.ShapeGeometry(sh,32);geo.scale(1,-1,1);geo.rotateX(-Math.PI/2);const surf=new THREE.Mesh(geo,new THREE.MeshBasicMaterial({color:0x5bc7ec,transparent:true,opacity:.28,side:THREE.DoubleSide,depthWrite:false}));surf.position.y=.025;nc.group.add(surf);nc.surface=surf}}catch(err){ncMessage('خطای تشکیل سطح: '+err.message)}}document.getElementById('ncExtrude').disabled=!(skClosed||skCircle)&&!ncSelectedRegions.size;ncPositionPull()}
+function ncDraw(){ncClearVisual();for(const seg of skSegments){if(seg.kind==='line')ncStroke([seg.a,seg.b]);else{const ar=skArcShape(seg.a,seg.m,seg.b);if(ar)ncStroke(Array.from({length:49},(_,i)=>({x:ar.cx+ar.r*Math.cos(ar.t0+ar.span*i/48),y:ar.cy+ar.r*Math.sin(ar.t0+ar.span*i/48)})))}}if(skCircle)ncStroke(ncCirclePoints(skCircle.center,skCircle.r));for(const p of [...skPoints,...skArcPoints,...(nc.rectStart?[nc.rectStart]:[])]){const dot=new THREE.Mesh(new THREE.SphereGeometry(1.05,14,10),new THREE.MeshBasicMaterial({color:0xf0a326}));dot.position.copy(nc3(p,.2));nc.group.add(dot)}if(skClosed||skCircle){try{const sh=skShape();if(sh){const geo=new THREE.ShapeGeometry(sh,32);geo.scale(1,-1,1);geo.rotateX(-Math.PI/2);const surf=new THREE.Mesh(geo,new THREE.MeshBasicMaterial({color:0x5bc7ec,transparent:true,opacity:.28,side:THREE.DoubleSide,depthWrite:false}));surf.position.y=.025;nc.group.add(surf);nc.surface=surf}}catch(err){ncMessage('خطای تشکیل سطح: '+err.message)}}document.getElementById('ncExtrude').disabled=!(skClosed||skCircle)&&!ncSelectedRegions.size;ncPositionPull()}
 function ncPositionPull(){if(nc.mode!=='pull'||(!nc.surface&&!ncSelectedRegions.size)){ncPull.style.display='none';return}const target=ncSelectedRegions.size?[...ncSelectedRegions][0].mesh:nc.surface;const box=new THREE.Box3().setFromObject(target),center=box.getCenter(new THREE.Vector3());center.y=Number(ncDepth.value)||0;center.project(camera);const r=canvas.getBoundingClientRect();const pr=ncPull.offsetParent?.getBoundingClientRect()||{left:0,top:0};const x=r.left-pr.left+(center.x+1)*r.width/2,y=r.top-pr.top+(1-center.y)*r.height/2;ncPull.style.left=Math.max(75,Math.min(r.width-65,x))+'px';ncPull.style.top=Math.max(120,Math.min(r.height-65,y))+'px';ncPull.style.display='flex'}
 function ncSetTool(t){
  if(nc.mode==='pull'){++ncPreviewEpoch;nc.drag=null;ncPull.style.display='none';document.getElementById('ncConfirm').style.display='none';ncClearVisual()}
  if((skClosed||skCircle)&&nc.surface){ncSaveRegion();skSegments=[];skPoints=[];skArcPoints=[];skCircle=null;skClosed=false;ncClearVisual()}
  ncSelectedRegions.clear();ncActiveRegion=null;ncUpdateRegionColors();ncSetSketchState(true);document.getElementById('ncExtrude').disabled=!(skClosed||skCircle);
- nc.tool=t;skTool=t==='rectangle'?'line':t;document.querySelectorAll('[data-nctool]').forEach(b=>b.classList.toggle('active',b.dataset.nctool===t));nc.rectStart=null;ncMessage('ابزار '+t+' فعال شد؛ روی شبکه سه‌بعدی لمس کنید');
+ nc.tool=t;ncPolygon?.show(t==='polygon');skTool=['rectangle','polygon'].includes(t)?'line':t;document.querySelectorAll('[data-nctool]').forEach(b=>b.classList.toggle('active',b.dataset.nctool===t));nc.rectStart=null;ncMessage('ابزار '+t+' فعال شد؛ روی شبکه سه‌بعدی لمس کنید');
 }
 function ncSketchReset(){if((skClosed||skCircle)&&nc.surface&&!ncActiveRegion)ncSaveRegion();ncActiveRegion=null;skSegments=[];skPoints=[];skArcPoints=[];skCircle=null;skClosed=false;nc.rectStart=null;nc.mode='sketch';ncClearVisual();ncPull.style.display='none';document.getElementById('ncExtrude').disabled=true;document.getElementById('ncConfirm').style.display='none';controls.enabled=true;ncMessage('Sketch آماده است · صفحه XZ · واحد mm')}
-function ncTap(p){if(nc.mode!=='sketch')return;if(nc.tool==='rectangle'){if(!nc.rectStart){ncSketchReset();nc.rectStart=p;ncMessage('گوشه مقابل مستطیل را انتخاب کنید')}else{const a=nc.rectStart,b=p;skPoints=[a,{x:b.x,y:a.y},b,{x:a.x,y:b.y}];skSegments=skPoints.map((q,i)=>({kind:'line',a:q,b:skPoints[(i+1)%4]}));skClosed=true;nc.rectStart=null}}else{skTool=nc.tool;skAdd(p)}ncDraw()}
+function ncTap(p){if(nc.mode!=='sketch')return;if(nc.tool==='polygon'){if(!nc.rectStart){const settings=polygonSettings({...ncPolygon.read(),center:p});snapshot();ncSketchReset();ncPolygon.set(settings);nc.rectStart=p;ncMessage('مرکز انتخاب شد؛ یک رأس را انتخاب کنید')}else ncPolygonFromPoints(nc.rectStart,p);ncDraw();return;}if(nc.tool==='rectangle'){if(!nc.rectStart){ncSketchReset();nc.rectStart=p;ncMessage('گوشه مقابل مستطیل را انتخاب کنید')}else{const a=nc.rectStart,b=p;skPoints=[a,{x:b.x,y:a.y},b,{x:a.x,y:b.y}];skSegments=skPoints.map((q,i)=>({kind:'line',a:q,b:skPoints[(i+1)%4]}));skClosed=true;nc.rectStart=null}}else{skTool=nc.tool;skAdd(p)}ncDraw()}
 let ncTapDown=null;
 canvas.addEventListener('pointerdown',e=>{if(nc.mode!=='sketch'||e.pointerType!=='__legacy_disabled__'||e.button>0)return;ncTapDown={id:e.pointerId,x:e.clientX,y:e.clientY}},true);
 canvas.addEventListener('pointerup',e=>{if(!ncTapDown||e.pointerId!==ncTapDown.id)return;const d=Math.hypot(e.clientX-ncTapDown.x,e.clientY-ncTapDown.y);ncTapDown=null;if(d>12||nc.mode!=='sketch')return;const p=ncPlanePoint(e);if(p){ncTap(p);e.stopImmediatePropagation();e.preventDefault()}},true);
@@ -1565,9 +1567,9 @@ async function ncFinish(){
   refreshList();select(objects.at(-1));ncMessage(objects.length+' حجم دقیق ساخته شد');
  }catch(err){ncMessage('خطای حجم‌دهی؛ طرح حفظ شد: '+err.message)}finally{ncBusy=false;ncHistoryUI();document.getElementById('ncConfirm').disabled=false}
 }
-document.querySelectorAll('[data-nctool]').forEach(b=>b.onclick=()=>ncSetTool(b.dataset.nctool));document.getElementById('ncCloseLoop').onclick=()=>{skClose();ncDraw()};document.getElementById('ncUndoPoint').onclick=()=>{if(skClosed){skClosed=false;skSegments.pop()}else{skSegments.pop();skPoints.pop();skArcPoints=[]}ncDraw()};document.getElementById('ncClear').onclick=ncSketchReset;
-function ncSetSketchState(active){nc.mode=active?'sketch':'select';document.getElementById('ncSketchGroup').classList.toggle('open',active);document.getElementById('ncSketch').classList.toggle('active',active)}
-document.getElementById('ncSketch').onclick=()=>{const g=document.getElementById('ncSketchGroup');if(g.classList.contains('open')){if((skClosed||skCircle)&&nc.surface){ncSaveRegion();skSegments=[];skPoints=[];skCircle=null;skClosed=false;ncClearVisual()}g.classList.remove('open');nc.mode='select';document.getElementById('ncSketch').classList.remove('active');ncMessage('Sketch بسته شد')}else{nc.mode='sketch';g.classList.add('open');document.getElementById('ncSketch').classList.add('active');ncMessage('Sketch فعال شد')}};document.getElementById('ncSplit').onclick=ncSplitRegions;document.getElementById('ncExtrude').onclick=ncStartPull;document.getElementById('ncConfirm').onclick=ncFinish;
+document.querySelectorAll('[data-nctool]').forEach(b=>b.onclick=()=>ncSetTool(b.dataset.nctool));document.getElementById('ncCloseLoop').onclick=()=>{skClose();ncDraw()};document.getElementById('ncUndoPoint').onclick=()=>{if(nc.rectStart){nc.rectStart=null;ncDraw();return}if(skClosed){skClosed=false;skSegments.pop()}else{skSegments.pop();skPoints.pop();skArcPoints=[]}ncDraw()};document.getElementById('ncClear').onclick=ncSketchReset;
+function ncSetSketchState(active){if(!active&&ncPen.active)ncCancelPen({pointerId:ncPen.active.id});ncPolygon?.show(active&&nc.tool==='polygon');nc.mode=active?'sketch':'select';document.getElementById('ncSketchGroup').classList.toggle('open',active);document.getElementById('ncSketch').classList.toggle('active',active)}
+document.getElementById('ncSketch').onclick=()=>{const g=document.getElementById('ncSketchGroup');if(g.classList.contains('open')){if(ncPen.active)ncCancelPen({pointerId:ncPen.active.id});if((skClosed||skCircle)&&nc.surface){ncSaveRegion();skSegments=[];skPoints=[];skCircle=null;skClosed=false;ncClearVisual()}g.classList.remove('open');nc.mode='select';document.getElementById('ncSketch').classList.remove('active');ncMessage('Sketch بسته شد')}else{nc.mode='sketch';g.classList.add('open');document.getElementById('ncSketch').classList.add('active');ncMessage('Sketch فعال شد')}};document.getElementById('ncSplit').onclick=ncSplitRegions;document.getElementById('ncExtrude').onclick=ncStartPull;document.getElementById('ncConfirm').onclick=ncFinish;
 document.getElementById('ncTopView').onclick=()=>setView('top');document.getElementById('ncIsoView').onclick=()=>setView('iso');document.getElementById('ncGrid').onclick=()=>grid.visible=!grid.visible;
 const ncItemsPanel=document.querySelector('.panel.left');
 document.getElementById('ncItems').onclick=()=>{const open=ncItemsPanel.classList.toggle('ncItemsVisible');document.getElementById('ncItems').classList.toggle('active',open);ncMessage(open?'فهرست قطعات باز شد':'فهرست قطعات بسته شد')};
@@ -1581,7 +1583,7 @@ function ncDraftData(){
 function ncValidateDraft(data){
  if(data==null)return null;
  const fail=()=>{throw Error('ترسیم نیمه‌تمام معتبر نیست')};
- if(typeof data!=='object'||!['line','arc','circle','rectangle'].includes(data.tool))fail();
+ if(typeof data!=='object'||!['line','arc','circle','rectangle','polygon'].includes(data.tool))fail();
  const point=p=>{if(!p||!Number.isFinite(p.x)||!Number.isFinite(p.y)||Math.max(Math.abs(p.x),Math.abs(p.y))>1e6)fail();return {x:p.x,y:p.y}};
  const points=(list,limit)=>{if(!Array.isArray(list)||list.length>limit)fail();return list.map(point)};
  const draft={tool:data.tool,points:points(data.points,2001),arcPoints:points(data.arcPoints,2),rectStart:data.rectStart==null?null:point(data.rectStart)};
@@ -1592,7 +1594,7 @@ function ncValidateDraft(data){
 function ncProjectData(){
  const regions=ncRegions.map(ncRegionData);
  if((skClosed||skCircle)&&nc.surface)regions.push({segments:structuredClone(skSegments),points:structuredClone(skPoints),circle:structuredClone(skCircle)});
- return {format:'NiliCAD-Web',version:'5.0',units:'mm',sketchRegions:regions,sketchDraft:ncDraftData(),objects:state().map(o=>({...o,dimensions:o.dims,position:o.pos,rotation:o.rot}))};
+ return {format:'NiliCAD-Web',version:'5.0',units:'mm',polygonTool:ncPolygon?.get()||polygonSettings(),sketchRegions:regions,sketchDraft:ncDraftData(),objects:state().map(o=>({...o,dimensions:o.dims,position:o.pos,rotation:o.rot}))};
 }
 function ncBuildRegion(data){
  let g;if(data.brep)g=ncMeshGeometry(data);else{if(!Array.isArray(data.segments)||!Array.isArray(data.points))throw Error('ناحیه Sketch نامعتبر است');const shape=ncRegionShape({...data,closed:true});if(!shape)throw Error('ناحیه بسته نیست');g=new THREE.ShapeGeometry(shape,64);g.scale(1,-1,1);g.rotateX(-Math.PI/2)}
@@ -1603,6 +1605,7 @@ function ncLoadProject(data,record=true){
  if(data.format!=='NiliCAD-Web'||!Array.isArray(data.objects)||data.objects.length>1000||Number.parseFloat(data.version||'1')>5||data.units&&data.units!=='mm')throw Error('فرمت یا نسخه پروژه پشتیبانی نمی‌شود');
  const allowed=['box','cylinder','sphere','cone','hexPrism','extrudeRect','extrudeCircle','holePlate','directionalHole','filletPlate','chamferPlate','edgeBox','booleanMesh'];
  const vector=(value,fallback,count=3)=>{value=value||fallback;if(!Array.isArray(value)||value.length!==count||value.some(v=>!Number.isFinite(v)))throw Error('مختصات نامعتبر است');return value};
+ const savedPolygon=polygonSettings(data.polygonTool===undefined?polygonDefaults:data.polygonTool);
  const draft=ncValidateDraft(data.sketchDraft),created=[],regions=[];
  try{
   for(const [i,o] of data.objects.entries()){
@@ -1617,7 +1620,7 @@ function ncLoadProject(data,record=true){
   if(!Array.isArray(data.sketchRegions||[])||(data.sketchRegions||[]).length>1000)throw Error('فهرست نواحی معتبر نیست');
   for(const r of data.sketchRegions||[])regions.push(ncBuildRegion(r));
  }catch(err){created.forEach(o=>{o.mesh.geometry.dispose();o.mesh.material.dispose()});regions.forEach(r=>{r.mesh.geometry.dispose();r.mesh.material.dispose()});throw err}
- if(record)snapshot();cancelBoolean();gizmo.detach();items.forEach(o=>{world.remove(o.mesh);o.mesh.geometry.dispose();o.mesh.material.dispose()});items=created;
+ if(record)snapshot();ncPolygon?.set(savedPolygon);cancelBoolean();gizmo.detach();items.forEach(o=>{world.remove(o.mesh);o.mesh.geometry.dispose();o.mesh.material.dispose()});items=created;
  ncClearRegions();ncClearVisual();skSegments=[];skPoints=[];skCircle=null;skClosed=false;skArcPoints=[];nc.rectStart=null;skPull=false;
  items.forEach(o=>world.add(o.mesh));regions.forEach(r=>{ncRegions.push(r);ncRegionLayer.add(r.mesh)});nextId=items.length+1;
  ncSetSketchState(false);ncPull.style.display='none';document.getElementById('ncConfirm').style.display='none';document.getElementById('ncExtrude').disabled=true;select(null);refreshList();
@@ -1742,7 +1745,7 @@ let ncStrokePreview=null;
 function ncPenMove(e){
  const d=ncPen.active;
  if(!d||d.id!==e.pointerId)return;
- const p=ncPenPoint(e);if(p){d.last=p;if(Math.hypot(e.clientX-d.clientX,e.clientY-d.clientY)>4)d.moved=true;if(ncStrokePreview){nc.group.remove(ncStrokePreview);ncStrokePreview.geometry.dispose();ncStrokePreview.material.dispose();ncStrokePreview=null}if(nc.tool==='line'||nc.tool==='rectangle'){const g=new THREE.BufferGeometry().setFromPoints([nc3(d.start,.35),nc3(p,.35)]);ncStrokePreview=new THREE.Line(g,new THREE.LineBasicMaterial({color:0xe49a23}));nc.group.add(ncStrokePreview)}}
+ const p=ncPenPoint(e);if(p){d.last=p;if(Math.hypot(e.clientX-d.clientX,e.clientY-d.clientY)>4)d.moved=true;if(ncStrokePreview){nc.group.remove(ncStrokePreview);ncStrokePreview.geometry.dispose();ncStrokePreview.material.dispose();ncStrokePreview=null}if(nc.tool==='polygon'){try{const center=nc.rectStart||d.start,dx=p.x-center.x,dy=p.y-center.y;const shape=regularPolygon({...ncPolygon.read(),center,radius:Math.hypot(dx,dy),angle:Math.atan2(dy,dx)*180/Math.PI});const g=new THREE.BufferGeometry().setFromPoints(shape.points.map(q=>nc3(q,.35)));ncStrokePreview=new THREE.LineLoop(g,new THREE.LineBasicMaterial({color:0xe49a23}));nc.group.add(ncStrokePreview)}catch{}}else if(nc.tool==='line'||nc.tool==='rectangle'){const g=new THREE.BufferGeometry().setFromPoints([nc3(d.start,.35),nc3(p,.35)]);ncStrokePreview=new THREE.Line(g,new THREE.LineBasicMaterial({color:0xe49a23}));nc.group.add(ncStrokePreview)}}
  e.preventDefault();e.stopImmediatePropagation();
 }
 function ncPenUp(e){
@@ -1750,7 +1753,8 @@ function ncPenUp(e){
  ncPen.active=null;ncTapDown=null;if(ncStrokePreview){nc.group.remove(ncStrokePreview);ncStrokePreview.geometry.dispose();ncStrokePreview.material.dispose();ncStrokePreview=null}
  const end=ncPenPoint(e)||d.last;
  const distance=Math.hypot(end.x-d.start.x,end.y-d.start.y);
- if(nc.tool==='rectangle'&&distance>.6){ncSketchReset();nc.tool='rectangle';skPoints=[d.start,{x:end.x,y:d.start.y},end,{x:d.start.x,y:end.y}];skSegments=skPoints.map((q,i)=>({kind:'line',a:q,b:skPoints[(i+1)%4]}));skClosed=true;ncDraw()}
+ if(nc.tool==='polygon'){try{const center=nc.rectStart||d.start;if(nc.rectStart||skDistance(center,end)>.6)ncPolygonFromPoints(center,end);else ncTap(end)}catch(error){ncMessage(error.message)}}
+ else if(nc.tool==='rectangle'&&distance>.6){ncSketchReset();nc.tool='rectangle';skPoints=[d.start,{x:end.x,y:d.start.y},end,{x:d.start.x,y:end.y}];skSegments=skPoints.map((q,i)=>({kind:'line',a:q,b:skPoints[(i+1)%4]}));skClosed=true;ncDraw()}
  else if(nc.tool==='circle'&&distance>.6){ncSketchReset();nc.tool='circle';skCircle={center:d.start,r:distance};ncDraw()}
  else if(nc.tool==='line'){
   if(skClosed){ncMessage('برای حجم‌دهی سطح را لمس کنید یا Sketch را پاک کنید')}
@@ -1903,6 +1907,14 @@ ncPath=installPathInspector({THREE,canvas,camera,controls,scene,request:ncReques
  }})
 });
 
+
+function ncCreatePolygon(settings){
+ if(ncBusy)throw Error('ابتدا عملیات هندسی را تمام کنید');
+ const shape=regularPolygon(settings);snapshot();++ncPreviewEpoch;clearTimeout(nc._previewTimer);ncSketchReset();ncSetTool('polygon');skPoints=shape.points;skSegments=shape.segments;skClosed=true;nc.rectStart=null;ncPolygon.set(shape.settings);ncDraw();ncMessage('چندضلعی '+shape.points.length+' ضلعی آماده است؛ مساحت '+shape.area.toFixed(3)+' mm²');
+}
+function ncPolygonFromPoints(center,vertex){const dx=vertex.x-center.x,dy=vertex.y-center.y;ncCreatePolygon({...ncPolygon.read(),center,radius:Math.hypot(dx,dy),angle:Math.atan2(dy,dx)*180/Math.PI})}
+ncPolygon=installPolygonTool({create:ncCreatePolygon,message:ncMessage});document.getElementById('ncSketch').addEventListener('click',()=>ncPolygon.show(nc.mode==='sketch'&&nc.tool==='polygon'));
+
 </script>
 <input type="file" id="ncCADFile" accept=".step,.stp,.iges,.igs" hidden><input type="file" id="ncMeshFile" accept=".stl,.obj,.3mf" hidden><div id="ncTop"><button class="ncBtn" id="ncHome">⌂</button><span class="ncTitle">NiliCAD v4.2.0 · <span id="ncProject">Untitled Project</span></span><button class="ncBtn" id="ncUndo" title="بازگشت Undo" aria-label="Undo" disabled>↶</button><button class="ncBtn" id="ncRedo" title="تکرار Redo" aria-label="Redo" disabled>↷</button><button class="ncBtn" id="ncMenu">•••</button></div>
 <div id="ncLeft"><button class="ncBtn" id="ncItems"><span class="ncIcon">▱</span>Items</button><div class="ncSeparator"></div>
@@ -1914,7 +1926,7 @@ ncPath=installPathInspector({THREE,canvas,camera,controls,scene,request:ncReques
 <button class="ncBtn" data-nctool="rectangle"><span class="ncIcon">▭</span>Rectangle</button>
 <button class="ncBtn" data-nctool="ellipse" disabled><span class="ncIcon">⬭</span>Ellipse · بعداً</button>
 <button class="ncBtn" data-nctool="spline" disabled><span class="ncIcon">〰</span>Spline · بعداً</button>
-<button class="ncBtn" data-nctool="polygon" disabled><span class="ncIcon">⬡</span>Polygon · بعداً</button>
+<button class="ncBtn" data-nctool="polygon"><span class="ncIcon">⬡</span>Polygon</button>
 <button class="ncBtn" id="ncCloseLoop"><span class="ncIcon">▣</span>Close Profile</button>
 <button class="ncBtn" id="ncUndoPoint"><span class="ncIcon">↶</span>Undo Point</button>
 <button class="ncBtn" id="ncClear"><span class="ncIcon">⌫</span>Clear Sketch</button>
