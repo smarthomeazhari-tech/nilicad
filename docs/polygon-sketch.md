@@ -1,0 +1,9 @@
+# Regular polygon sketch
+
+The Polygon tool creates exact closed line profiles on the XZ sketch plane. Choose 3–64 sides, circumradius (0.01–10000 mm), angle in degrees and center X/Z, then Create polygon. Alternatively drag from center to a vertex with pen or mouse, or pick the center and vertex in two taps. The panel reports side length, apothem and area. Settings describe the next construction; they do not resize existing profiles.
+
+`polygon-tool.mjs` validates input and constructs ordered vertices and line segments. The main controller commits one undoable profile only after validation; live pointer previews are disposable. Pointer cancellation leaves document geometry unchanged. Existing profiles remain separate and can be split, selected and extruded together by the browser OCCT kernel. No geometry-server endpoint or approximate mesh conversion is involved.
+
+Version 5 project files optionally include `polygonTool: {sides, radius, angle, center: {x, y}}`, where center.y is sketch Z. Older files use the default hexagon settings. Pending two-tap construction uses `sketchDraft.tool = "polygon"` and `rectStart`; file loading and local recovery preserve it. Invalid settings reject loading before the current document is replaced. Undo/redo preserves construction settings alongside geometry.
+
+`tests/polygon.test.cjs` checks all allowed side counts, independent area/length invariants, exact positive/negative extrusion, holes, STEP round trips and point inspection. `tests/polygon-ui.test.cjs` exercises the protected shipping bundle in Chromium/WebKit: numeric inputs, invalid input/file preservation, history, point reports, touch selection, pending-center recovery, pointer cancellation, pen/mouse construction and multi-region extrusion. Windows CI runs the Chromium workflow. Physical Pencil behavior remains tracked separately in issue #6.
