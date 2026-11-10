@@ -64,5 +64,42 @@ single-threaded OCCT WebAssembly kernel in a Web Worker. `ncRequest` selects the
 local worker adapter in browser mode and the existing HTTP adapter only when a
 remote/local server is explicitly chosen. Exact recipes and returned display
 meshes use the same data model, so existing projects remain compatible. STEP
-import/export runs in the worker; IGES and nonuniform transformations remain
-explicit limitations of the browser build. See browser-engine.md.
+import/export runs in the worker. A later optional isolated converter adds IGES
+through exact STEP transfer; nonuniform transformations remain unsupported. See browser-engine.md.
+
+## Private release workspace and recovery (2026-11-07)
+
+The current protected build bundles the inline CAD controller together with
+`workspace-ui.mjs` into a classic deferred application. The latter owns workspace
+presentation/navigation and calls a small state/action bridge; it does not
+implement geometry. All display/OCCT assets are hosted locally behind the Worker.
+The optional IGES bridge is implemented and tested; see browser-engine.md and
+browser-engine/iges/README.md.
+
+History now includes objects, independent sketch regions and unfinished drafts.
+The same validated v5 document is downloaded as JSON and stored atomically in
+IndexedDB for local recovery, before sample loading. Recovery is not a remote
+project service; browsers can evict it and uncommitted changes can be lost.
+Corrupt/unavailable storage leaves explicit file workflows usable.
+
+The new workspace offers contextual region/body tools, Items, numeric and gizmo
+Move/Rotate, world bounds, a sketch flyout with Finish/Cancel, file/history
+navigation and orientation controls. Pointer selection yields to TransformControls;
+a legacy pointer-release deselection listener was removed because it detached
+finished gizmo drags. Pen/primary mouse draws, fingers navigate, and right mouse
+orbits. See workspace.md for interactions and remaining feature boundaries.
+
+Shipping-build workflows, exact volume/bounds tests, protected asset access and
+recovery are covered in Chromium/WebKit and Windows Chromium CI. These automated
+checks do not replace physical iPad/Pencil or OS Files acceptance in issue #6.
+
+## Exact subshape interaction (2026-11-08)
+
+`direct-modeling.mjs` adds the Auto/Body/Face/Edge selection strip, OCCT subshape
+pick proxies, area/length inspection and direct planar face gestures. The browser
+kernel returns a canonical B-Rep snapshot for topology indices and evaluates
+self-contained `facePull` recipes before replacing a document body. History,
+recovery and CAD export retain exact geometry. Cancel/stale-result guards prevent
+late worker results from changing the original. The legacy box-only subshape
+panel is not used by the new workspace. See direct-modeling.md for behavior,
+validation and the bounded planar-footprint operation's limitations.

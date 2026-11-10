@@ -1,4 +1,6 @@
 import * as r from 'replicad';
+import {ellipseSettings} from '../ellipse-tool.mjs';
+import {createPathTools} from './path-tools.mjs';
 
 export function createKernel(oc) {
  r.setOC(oc);
@@ -8,10 +10,13 @@ export function createKernel(oc) {
  const point=p=>[finite(p.x),0,finite(p.y)];
  const valid=shape=>{const check=own(new oc.BRepCheck_Analyzer(shape.wrapped,true));if(shape.isNull||!check.IsValid())throw Error('هندسه OCCT معتبر نیست');return shape};
  const load=data=>{if(typeof data!=='string'||data.length>20000000)throw Error('داده B-Rep نامعتبر است');return valid(own(r.deserializeShape(data)))};
+ function ellipseEdge(input){const s=ellipseSettings(input),swap=s.ry>s.rx,t=(s.angle+(swap?90:0))*Math.PI/180;return own(r.makeEllipse(Math.max(s.rx,s.ry),Math.min(s.rx,s.ry),point(s.center),[0,-1,0],[Math.cos(t),0,Math.sin(t)]))}
+ const pathTools=createPathTools({r,oc,own,load,finite,ellipseEdge});
  function face(node){
   if(node.brep){const shape=load(node.brep);const faces=shape instanceof r.Face?[shape]:shape.faces.map(own);if(faces.length!==1)throw Error('یک سطح مسطح لازم است');const f=faces[0];if(f.geomType!=='PLANE')throw Error('سطح باید مسطح باشد');return f}
   let edges;
-  if(node.circle){const radius=finite(node.circle.r);if(radius<=0)throw Error('شعاع باید مثبت باشد');edges=[own(r.makeCircle(radius,point(node.circle.center),[0,1,0]))]}
+  if(node.ellipse)edges=[ellipseEdge(node.ellipse)];
+  else if(node.circle){const radius=finite(node.circle.r);if(radius<=0)throw Error('شعاع باید مثبت باشد');edges=[own(r.makeCircle(radius,point(node.circle.center),[0,1,0]))]}
   else {if(!Array.isArray(node.segments)||node.segments.length<2||node.segments.length>2000)throw Error('مسیر بسته معتبر لازم است');edges=node.segments.map(seg=>{if(seg.kind==='line')return own(r.makeLine(point(seg.a),point(seg.b)));if(seg.kind==='arc')return own(r.makeThreePointArc(point(seg.a),point(seg.m),point(seg.b)));throw Error('نوع منحنی پشتیبانی نمی‌شود')})}
   return valid(own(r.makeFace(own(r.assembleWire(edges)))));
  }
@@ -28,7 +33,9 @@ export function createKernel(oc) {
   if(node.op==='transform')return transform(make(node.shape,level+1),node.transform);
   if(node.op){const a=make(node.left,level+1),b=make(node.right,level+1);if(node.op==='union')return own(a.fuse(b));if(node.op==='subtract')return own(a.cut(b));if(node.op==='intersect')return own(a.intersect(b));throw Error('عملیات پشتیبانی نمی‌شود')}
   let shape;
-  if(node.type==='brep')shape=load(node.brep);
+  if(node.type==='edgeFinish')shape=edgeFinish(node);
+  else if(node.type==='facePull')shape=planarPull(node);
+  else if(node.type==='brep')shape=load(node.brep);
   else if(node.type==='profile')shape=extrude(face(node),node.depth);
   else {
    const d=node.dims||{},x=finite(d.x??40),y=finite(d.y??30),z=finite(d.z??20);if(Math.min(x,y,z)<=0)throw Error('ابعاد باید مثبت باشد');
@@ -43,6 +50,33 @@ export function createKernel(oc) {
   }
   return node.transform?transform(shape,node.transform):shape;
  }
+ function edgeFinish(node){
+  const shape=load(node.brep),edges=shape.edges.map(own),indices=node.edgeIndices,amount=finite(node.amount);
+  if(!['fillet','chamfer','sketch-paths','path-point','ellipse-sketch'].includes(node.mode))throw Error('نوع اصلاح لبه معتبر نیست');
+  if(!Array.isArray(indices)||!indices.length||indices.length>100||new Set(indices).size!==indices.length||indices.some(i=>!Number.isInteger(i)||i<0||i>=edges.length))throw Error('شناسه لبه معتبر نیست');
+  if(amount<.01||amount>10000)throw Error('شعاع یا اندازه پخ باید بین ۰٫۰۱ و ۱۰۰۰۰ میلی‌متر باشد');
+  const chosen=indices.map(i=>edges[i]);
+  const next=valid(own(shape[node.mode](edge=>chosen.some(e=>e.isSame(edge))?amount:null)));
+  if(!next.solids.map(own).length||Math.abs(r.measureVolume(next))<1e-8)throw Error('اصلاح لبه حجم معتبر ایجاد نکرد');
+  return next;
+ }
+ function planarPull(node){
+  const shape=load(node.brep),faces=shape.faces.map(own),index=node.faceIndex,distance=finite(node.distance);
+  if(!Number.isInteger(index)||index<0||index>=faces.length)throw Error('شناسه وجه معتبر نیست');
+  if(Math.abs(distance)<.01||Math.abs(distance)>10000)throw Error('فاصله باید بین ۰٫۰۱ و ۱۰۰۰۰ میلی‌متر باشد');
+  const f=faces[index];if(f.geomType!=='PLANE')throw Error('کشیدن مستقیم فعلاً برای وجه مسطح پشتیبانی می‌شود');
+  const normal=own(f.normalAt()).toTuple(),length=Math.hypot(...normal);if(length<1e-9)throw Error('بردار عمود وجه معتبر نیست');
+  const vector=own(new r.Vector(normal.map(v=>v/length*distance))),tool=own(r.basicFaceExtrusion(f,vector));
+  const next=valid(own(distance>0?shape.fuse(tool):shape.cut(tool))),before=Math.abs(r.measureVolume(shape)),after=Math.abs(r.measureVolume(next));
+  if(!next.solids.map(own).length||after<1e-8||(distance>0?after<=before+1e-8:after>=before-1e-8))throw Error('جابجایی وجه حجم معتبر ایجاد نمی‌کند؛ مقدار را کاهش دهید');
+  return next;
+ }
+ function topology(node){
+  // Canonicalize once: the returned B-Rep and indices always refer to this immutable snapshot.
+  const brep=make(node).serialize(),shape=load(brep),faces=shape.faces.map(own),edges=shape.edges.map(own);
+  if(faces.length>2000||edges.length>4000)throw Error('توپولوژی این قطعه برای انتخاب تعاملی بیش از حد بزرگ است');
+  return {brep,faces:faces.map((f,index)=>{const center=own(f.center).toTuple(),n=own(f.normalAt()).toTuple(),length=Math.hypot(...n);return {index,kind:f.geomType,area:r.measureArea(f),center,normal:length?n.map(v=>v/length):null,...mesh(f)}}),edges:edges.map((e,index)=>({index,kind:e.geomType,length:r.measureLength(e),positions:Array.from(e.meshEdges({tolerance:.02,angularTolerance:.08}).lines)}))};
+ }
  function mesh(shape){const data=shape.mesh({tolerance:.05,angularTolerance:.1});return {positions:Array.from(data.vertices),indices:Array.from(data.triangles)}}
  function result(shape){valid(shape);const solids=shape.solids.map(own);return {...mesh(shape),brep:shape.serialize(),volume:solids.length?Math.abs(r.measureVolume(shape)):0,solids:solids.length,valid:true}}
  function split(nodes){
@@ -56,9 +90,12 @@ export function createKernel(oc) {
  async function handle(path,payload){
   owned=[];
   try{
-   if(path==='/health')return {ok:true,kernel:'Open CASCADE WebAssembly',mode:'browser',features:['regions','extrude','boolean','step']};
+   if(path==='/health')return {ok:true,kernel:'Open CASCADE WebAssembly',mode:'browser',features:['regions','extrude','boolean','step','topology','planar-face-pull','fillet','chamfer','sketch-paths','path-point','ellipse-sketch']};
    if(path==='/evaluate')return result(make(payload));
    if(path==='/regions')return split(payload.profiles);
+   if(path==='/topology')return topology(payload);
+   if(path==='/paths')return pathTools.paths(payload);
+   if(path==='/path-point')return pathTools.inspect(payload);
    if(path==='/export-step'){
     if(!Array.isArray(payload.objects)||!payload.objects.length||payload.objects.length>100)throw Error('بین ۱ و ۱۰۰ قطعه لازم است');
     const shapes=payload.objects.map(node=>({shape:own(make(node).rotate(90,[0,0,0],[1,0,0]))}));const blob=r.exportSTEP(shapes,{unit:'MM',modelUnit:'MM'});return {binary:await blob.arrayBuffer(),type:'model/step'};

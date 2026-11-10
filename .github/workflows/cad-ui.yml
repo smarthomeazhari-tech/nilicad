@@ -3,6 +3,7 @@ on: [push, pull_request]
 jobs:
   browsers:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -13,8 +14,33 @@ jobs:
       - run: npx playwright install --with-deps chromium webkit
       - name: Verify WebAssembly geometry and browser workflows without a backend
         run: npm test
+      - name: Validate protected Worker deployment bundle without publishing
+        run: npx wrangler deploy --dry-run --config private-preview/wrangler.jsonc --outdir /tmp/nilicad-private-worker
+        env:
+          WRANGLER_SEND_METRICS: 'false'
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: browser-only-cad-screenshots
+          path: test-results/
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install chromium
+      - run: npm run build:private
+      - name: Verify exact geometry and private authentication on Windows
+        run: node --test --test-concurrency=1 tests/browser-kernel.test.cjs tests/direct-kernel.test.cjs tests/edge-kernel.test.cjs tests/path-kernel.test.cjs tests/polygon.test.cjs tests/ellipse.test.cjs tests/private-auth.test.cjs tests/iges.test.cjs
+      - name: Verify Windows Chromium drawing, files, drafts and protected viewport
+        run: node --test --test-concurrency=1 --test-name-pattern=chromium tests/ui.test.cjs tests/private-auth-ui.test.cjs tests/project-draft.test.cjs tests/acceptance.test.cjs tests/recovery.test.cjs tests/workspace.test.cjs tests/direct-ui.test.cjs tests/edge-ui.test.cjs tests/path-ui.test.cjs tests/polygon-ui.test.cjs tests/ellipse-ui.test.cjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: windows-chromium-cad-screenshots
           path: test-results/
