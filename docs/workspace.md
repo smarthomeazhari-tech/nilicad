@@ -1,0 +1,13 @@
+# Professional workspace and input model
+
+The owner requested a Shapr3D-style environment. `workspace-ui.mjs` supplies the new presentation and navigation, bundled into the protected application. The existing exact geometry controller in `index.html` remains responsible for modeling, document validation, transactions and exports.
+
+The full-screen work area has a compact tool rail, a Sketch flyout, an Items panel, project/history/file navigation, an orientation cube with Top/Front/Right faces, 3D/Grid/Fit controls and a selection inspector. Region selection offers Extrude; body selection offers solid tools and Move/Rotate. Unimplemented tools are omitted from primary navigation. File actions close their flyout; opening a modeling tool dismisses overlapping Items. The workspace adapts to desktop, landscape/portrait iPad and narrow screens.
+
+Finish Sketch preserves completed profiles as selectable regions. Escape or the on-screen Cancel ends pending tools without deleting the sketch; Boolean cancellation retains both operands. Drawing uses pen or primary mouse button, while fingers retain orbit/pan/pinch camera navigation. In selection mode, primary pointer taps select; right mouse drag orbits and middle mouse drag pans. Move/Rotate uses the existing three-axis gizmo, with exact numeric offsets (mm) or rigid rotations (degrees) available in its panel. Selection handlers yield events while a gizmo is active. Numeric transformations and body renames participate in Undo/Redo and local recovery.
+
+Shortcuts outside form fields: Ctrl/Cmd+S downloads a project, Ctrl/Cmd+Z undoes, Shift+Ctrl/Cmd+Z redoes, F fits all, 1 shows Top, 2 shows 3D, Delete/Backspace deletes selection, Escape cancels the active tool. A modal help panel explains navigation. Buttons have accessible labels, focus indicators and touch targets; the selected tool and expandable panels report ARIA state.
+
+This is an original NiliCAD workspace implementation using the requested interaction pattern. It does not claim all Shapr3D modeling features: sketching remains on the existing XZ workplane, arbitrary face-based sketch planes, constraints and other previously unavailable tools are not added by the redesign. Physical iPad/Pencil acceptance remains tracked separately in issue #6.
+
+Validation uses the shipping bundle without private-state test hooks. It covers contextual selection, renaming, numeric Move/Rotate with history, preserving exact recipes, finishing drawings, file menus, keyboard input and screenshots/bounds at 1366×900, 1024×768, 768×1024 and 390×844. Existing CAD acceptance tests continue to verify exact regions, holes, all Booleans, negative/multiple extrusions and CAD/mesh file exchange through the redesigned controls.
