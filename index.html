@@ -1553,7 +1553,7 @@ async function ncStartPull(){
  if(!ncSelectedRegions.size&&(skClosed||skCircle)&&nc.surface){const r=ncSaveRegion();if(r)ncSelectRegion(r);skClosed=false;skCircle=null;skSegments=[];skPoints=[];ncClearVisual()}
  if(!await ncSplitRegions())return;
  if(!ncSelectedRegions.size){ncMessage('ابتدا یک یا چند ناحیه مستقل را انتخاب کنید');return}
- ncDepth.value='0';nc.mode='pull';document.getElementById('ncConfirm').style.display='flex';ncPullPreview();ncMessage(ncSelectedRegions.size+' ناحیه انتخاب شده؛ فلش را بکشید یا عمق وارد کنید');
+ ncDepth.value='0';nc.mode='pull';ncWorkspace?.refresh();document.getElementById('ncConfirm').style.display='flex';ncPullPreview();ncMessage(ncSelectedRegions.size+' ناحیه انتخاب شده؛ فلش را بکشید یا عمق وارد کنید');
 }
 const ncHandle=ncPull.querySelector('.handle');ncHandle.addEventListener('pointerdown',e=>{nc.drag={id:e.pointerId,y:e.clientY,depth:Number(ncDepth.value)||0};ncHandle.setPointerCapture(e.pointerId);e.preventDefault()});ncHandle.addEventListener('pointermove',e=>{if(!nc.drag||e.pointerId!==nc.drag.id)return;ncDepth.value=(nc.drag.depth+(nc.drag.y-e.clientY)*.4).toFixed(1);ncPositionPull();clearTimeout(nc._previewTimer);nc._previewTimer=setTimeout(ncPullPreview,80)});ncHandle.addEventListener('pointerup',()=>nc.drag=null);ncHandle.addEventListener('pointercancel',()=>nc.drag=null);ncHandle.addEventListener('lostpointercapture',()=>nc.drag=null);ncDepth.addEventListener('change',ncPullPreview);
 async function ncFinish(){
