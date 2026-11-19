@@ -13,7 +13,7 @@ npx playwright install --with-deps chromium webkit
 npm test
 ```
 
-The 25 test groups cover exact primitives and Booleans (including empty
+The automated test groups cover exact primitives and Booleans (including empty
 intersections), independent overlapping/nested regions, circular holes, signed
 multiple extrusion, old Python B-Rep compatibility and asymmetric STEP round
 trips. Browser tests exercise selection, actual drawing, pull drag/cancel,
@@ -112,3 +112,11 @@ safe failure, and retry successfully. IGES requests send no CAD data to a server
 The tested models use a 32 MiB converter WASM heap; that is not a total browser
 memory measurement. Physical iPad IGES interoperability is not claimed by Linux
 WebKit or Windows automation.
+
+## Reproducible Linux runner
+
+The Linux workflow uses the official Playwright 1.58.2 Noble container on an Ubuntu 24.04 host, pinned by image digest. Its bundled Chromium/WebKit revisions match the locked npm Playwright version. Browsers and system libraries are already installed; the job does not depend on apt mirror availability. Update the image version/digest together with Playwright when upgrading. Windows retains its separate native Chromium job.
+
+On 2026-11-19, ubuntu-latest moved to unsupported Ubuntu 26.04. Hosted browser-library installation also encountered connection timeouts/503 responses from regional HTTP mirrors and the official Ubuntu archive. See issue #43 for evidence. The official container avoids that setup dependency while keeping the complete geometry/browser assertions. The expanded sequential Linux suite has 61 groups and can take about 13 minutes locally; its job budget is 20 minutes, with existing individual scenario timeouts unchanged.
+
+Spline/ellipse numeric controls are checked for readable contrast. The created spline profile is verified in rendered pixels. A DOM mutation observer checks that Extrude Confirm and Cancel appear together, preventing delayed footer layout changes from losing a press/release click; see issue #42.
