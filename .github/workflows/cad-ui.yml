@@ -3,6 +3,9 @@ on: [push, pull_request]
 jobs:
   browsers:
     runs-on: ubuntu-24.04
+    container:
+      image: mcr.microsoft.com/playwright:v1.58.2-noble@sha256:6446946a1d9fd62d9ae501312a2d76a43ee688542b21622056a372959b65d63d
+      options: --ipc=host
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
@@ -11,12 +14,6 @@ jobs:
           node-version: '24'
           cache: npm
       - run: npm ci
-      - name: Prefer reachable HTTPS Ubuntu mirror for browser libraries
-        run: |
-          if [ -f /etc/apt/apt-mirrors.txt ]; then
-            printf '%s\n' 'https://archive.ubuntu.com/ubuntu/ priority:1' 'https://security.ubuntu.com/ubuntu/ priority:2' | sudo tee /etc/apt/apt-mirrors.txt
-          fi
-      - run: npx playwright install --with-deps chromium webkit
       - name: Verify WebAssembly geometry and browser workflows without a backend
         run: npm test
       - name: Validate protected Worker deployment bundle without publishing
