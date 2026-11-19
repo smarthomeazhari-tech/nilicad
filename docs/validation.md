@@ -116,3 +116,5 @@ WebKit or Windows automation.
 ## Reproducible Linux runner
 
 The Linux workflow uses `ubuntu-24.04`, supported by the locked Playwright 1.58.2. On 2026-11-19, `ubuntu-latest` resolved to Ubuntu 26.04 and browser dependency installation failed before app tests started. Pinning the supported OS avoids that moving-alias failure. Browser and geometry assertions remain unchanged; Windows uses its separate Chromium job.
+
+The expanded sequential Linux suite has 61 groups and can take about 13 minutes locally, before browser/setup time. Its job budget is 20 minutes; individual browser scenarios retain their existing timeouts. Spline/ellipse numeric controls are also checked for readable contrast and the created spline profile is checked in rendered pixels.
