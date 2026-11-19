@@ -13,7 +13,7 @@ npx playwright install --with-deps chromium webkit
 npm test
 ```
 
-The 25 test groups cover exact primitives and Booleans (including empty
+The automated test groups cover exact primitives and Booleans (including empty
 intersections), independent overlapping/nested regions, circular holes, signed
 multiple extrusion, old Python B-Rep compatibility and asymmetric STEP round
 trips. Browser tests exercise selection, actual drawing, pull drag/cancel,
@@ -112,3 +112,7 @@ safe failure, and retry successfully. IGES requests send no CAD data to a server
 The tested models use a 32 MiB converter WASM heap; that is not a total browser
 memory measurement. Physical iPad IGES interoperability is not claimed by Linux
 WebKit or Windows automation.
+
+## Reproducible Linux runner
+
+The Linux workflow uses `ubuntu-24.04`, supported by the locked Playwright 1.58.2. On 2026-11-19, `ubuntu-latest` resolved to Ubuntu 26.04 and browser dependency installation failed before app tests started. Pinning the supported OS avoids that moving-alias failure. Browser and geometry assertions remain unchanged; Windows uses its separate Chromium job.
