@@ -38,3 +38,7 @@ The optional v5 `polygonTool` field preserves side count, circumradius, angle an
 ## Ellipse construction
 
 The optional v5 `ellipseTool` field stores `{rx, ry, angle, center: {x, y}}` in mm/degrees for the next construction. Center y is sketch Z; rx and ry are semi-axes. Pending center/corner construction uses draft tool `ellipse` and `rectStart`. Completed ellipses use canonical face B-Reps, preserving analytic geometry. Older documents default to 25/15 mm semi-axes. See [ellipse-sketch.md](ellipse-sketch.md).
+
+## Cubic Bezier construction
+
+The optional v5 `splineTool` field stores four control points for the next single cubic Bezier profile. A pending draft has tool `spline` and an optional `splinePoints` list containing up to three controls. Coordinates are X/Z in mm (JSON y is sketch Z). Completed profiles use canonical face B-Reps with a cubic edge and a straight closing chord. Older files use default settings. See [spline-sketch.md](spline-sketch.md).

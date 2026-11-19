@@ -1,4 +1,5 @@
 import * as r from 'replicad';
+import {splineSettings} from '../spline-tool.mjs';
 import {ellipseSettings} from '../ellipse-tool.mjs';
 import {createPathTools} from './path-tools.mjs';
 
@@ -11,11 +12,13 @@ export function createKernel(oc) {
  const valid=shape=>{const check=own(new oc.BRepCheck_Analyzer(shape.wrapped,true));if(shape.isNull||!check.IsValid())throw Error('هندسه OCCT معتبر نیست');return shape};
  const load=data=>{if(typeof data!=='string'||data.length>20000000)throw Error('داده B-Rep نامعتبر است');return valid(own(r.deserializeShape(data)))};
  function ellipseEdge(input){const s=ellipseSettings(input),swap=s.ry>s.rx,t=(s.angle+(swap?90:0))*Math.PI/180;return own(r.makeEllipse(Math.max(s.rx,s.ry),Math.min(s.rx,s.ry),point(s.center),[0,-1,0],[Math.cos(t),0,Math.sin(t)]))}
- const pathTools=createPathTools({r,oc,own,load,finite,ellipseEdge});
+ function splineEdge(input){return own(r.makeBezierCurve(splineSettings(input).points.map(point)))}
+ const pathTools=createPathTools({r,oc,own,load,finite,ellipseEdge,splineEdge});
  function face(node){
   if(node.brep){const shape=load(node.brep);const faces=shape instanceof r.Face?[shape]:shape.faces.map(own);if(faces.length!==1)throw Error('یک سطح مسطح لازم است');const f=faces[0];if(f.geomType!=='PLANE')throw Error('سطح باید مسطح باشد');return f}
   let edges;
-  if(node.ellipse)edges=[ellipseEdge(node.ellipse)];
+  if(node.spline){const settings=splineSettings(node.spline);edges=[splineEdge(settings),own(r.makeLine(point(settings.points[3]),point(settings.points[0])))]}
+  else if(node.ellipse)edges=[ellipseEdge(node.ellipse)];
   else if(node.circle){const radius=finite(node.circle.r);if(radius<=0)throw Error('شعاع باید مثبت باشد');edges=[own(r.makeCircle(radius,point(node.circle.center),[0,1,0]))]}
   else {if(!Array.isArray(node.segments)||node.segments.length<2||node.segments.length>2000)throw Error('مسیر بسته معتبر لازم است');edges=node.segments.map(seg=>{if(seg.kind==='line')return own(r.makeLine(point(seg.a),point(seg.b)));if(seg.kind==='arc')return own(r.makeThreePointArc(point(seg.a),point(seg.m),point(seg.b)));throw Error('نوع منحنی پشتیبانی نمی‌شود')})}
   return valid(own(r.makeFace(own(r.assembleWire(edges)))));
@@ -52,7 +55,7 @@ export function createKernel(oc) {
  }
  function edgeFinish(node){
   const shape=load(node.brep),edges=shape.edges.map(own),indices=node.edgeIndices,amount=finite(node.amount);
-  if(!['fillet','chamfer','sketch-paths','path-point','ellipse-sketch'].includes(node.mode))throw Error('نوع اصلاح لبه معتبر نیست');
+  if(!['fillet','chamfer','sketch-paths','path-point','ellipse-sketch','cubic-bezier-sketch'].includes(node.mode))throw Error('نوع اصلاح لبه معتبر نیست');
   if(!Array.isArray(indices)||!indices.length||indices.length>100||new Set(indices).size!==indices.length||indices.some(i=>!Number.isInteger(i)||i<0||i>=edges.length))throw Error('شناسه لبه معتبر نیست');
   if(amount<.01||amount>10000)throw Error('شعاع یا اندازه پخ باید بین ۰٫۰۱ و ۱۰۰۰۰ میلی‌متر باشد');
   const chosen=indices.map(i=>edges[i]);
@@ -90,7 +93,7 @@ export function createKernel(oc) {
  async function handle(path,payload){
   owned=[];
   try{
-   if(path==='/health')return {ok:true,kernel:'Open CASCADE WebAssembly',mode:'browser',features:['regions','extrude','boolean','step','topology','planar-face-pull','fillet','chamfer','sketch-paths','path-point','ellipse-sketch']};
+   if(path==='/health')return {ok:true,kernel:'Open CASCADE WebAssembly',mode:'browser',features:['regions','extrude','boolean','step','topology','planar-face-pull','fillet','chamfer','sketch-paths','path-point','ellipse-sketch','cubic-bezier-sketch']};
    if(path==='/evaluate')return result(make(payload));
    if(path==='/regions')return split(payload.profiles);
    if(path==='/topology')return topology(payload);
