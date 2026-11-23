@@ -22,9 +22,11 @@ credentials are not forwarded to the asset binding or written to logs.
 1. Use branch `feat/private-preview-auth` of this repository.
 2. Run `npm ci` and `npm run build:private`.
 3. Run `npx wrangler login` and authorize your own Cloudflare account.
-4. Run `npm run private:deploy` to create the Worker. It initially returns 503
-   because no credentials have been configured.
-5. Run `npm run private:configure`. Enter your username, then enter and confirm a
+4. Run `npm run private:deploy` to deploy the configured `nilicad` Worker. A newly
+   created Worker returns 503 until credentials are configured. The existing
+   production Worker retains its runtime secrets because `keep_vars` is enabled.
+5. For a new Worker, or to deliberately rotate credentials, run
+   `npm run private:configure`. Enter your username, then enter and confirm a
    password of at least 16 characters. Password input is hidden. The setup writes
    secrets through Wrangler stdin without creating a credential file.
 6. Open the HTTPS `workers.dev` URL returned by Cloudflare and verify both a
@@ -45,8 +47,13 @@ and deploy command `npm run private:deploy` (repository root is the build root).
 After deployment open Worker **Settings → Variables and Secrets** and add both
 `AUTH_USERNAME` and `AUTH_PASSWORD` as **Secret** values, then apply/deploy the
 change. Never put them in plain `vars`, commit them or paste them into an issue.
-The Worker name and rate-limit namespace can be changed in `wrangler.jsonc` to
-avoid conflicts with resources already in your account.
+The connected Worker is **`nilicad`**, serving
+`https://nilicad.smart-home-azhari.workers.dev`. Its name must match the `name`
+in `wrangler.jsonc`; both deployment and secret setup use that configuration.
+The old `nilicad-private` default targeted a different Worker and could conflict
+with the connected build target. Do not rely on a dashboard-only `--name` override
+to keep these commands aligned. For a separate installation, change the name in
+the configuration and select the same Worker in its Git integration.
 
 ## Existing public copies
 
@@ -69,12 +76,13 @@ access the application.
 CAD geometry stays in the browser. Initial WASM download is approximately 22 MiB.
 STEP and IGES are supported. IGES lazily loads an additional ~11 MiB converter
 which terminates after use; nonuniform transforms remain unsupported.
-Physical iPad/Pencil and Windows acceptance remains tracked separately.
+Physical iPad/Pencil/OS Files acceptance remains tracked separately. Native
+Windows Chromium workflows run in GitHub Actions.
 
 ## Tests and validation
 
 `npm test` builds the private artifact and runs geometry/UI regressions plus
-seven auth tests and protected Chromium/WebKit browser scenarios. Anonymous
+authentication/configuration tests and protected Chromium/WebKit browser scenarios. Anonymous
 requests for HTML, model JSON and WASM must be rejected before asset access;
 authenticated browsers load the real CAD model and evaluate the WASM kernel.
 
