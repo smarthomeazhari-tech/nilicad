@@ -29,6 +29,6 @@ test('WASM STEP round trip preserves asymmetric dimensions and orientation',asyn
  const imported=await engine.handle('/import-cad/step',data.binary);close(imported.volume,6000);
  for(const axis of [0,1,2]){const bounds=r=>{const values=r.positions.filter((_,i)=>i%3===axis);return [Math.min(...values),Math.max(...values)]};bounds(original).forEach((v,i)=>close(bounds(imported)[i],v,.001))}
 });
-test('WASM rejects invalid inputs and reports unsupported IGES explicitly',async()=>{
+test('Base WASM rejects invalid inputs; IGES routes through the isolated adapter',async()=>{
  for(const [path,payload] of [['/regions',{profiles:[]}],['/evaluate',{type:'profile',...rect(0,0,10,10),depth:0}],['/evaluate',{type:'brep',brep:'bad'}],['/import-cad/iges',new ArrayBuffer(0)]])await assert.rejects(engine.handle(path,payload));
 });

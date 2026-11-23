@@ -1,0 +1,2 @@
+tests/fixtures/*.iges -text
+browser-engine/iges/vendor/*.gz -text
