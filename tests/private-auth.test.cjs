@@ -13,3 +13,9 @@ test('limiter failures fail closed and passwords can be changed immediately',asy
 test('Wrangler routes every static request through the authentication Worker',()=>{const config=JSON.parse(require('fs').readFileSync(require('path').join(__dirname,'../private-preview/wrangler.jsonc'),'utf8'));assert.equal(config.keep_vars,true);assert.equal(config.assets.run_worker_first,true);assert.equal(config.assets.binding,'ASSETS');assert.equal(config.ratelimits[0].name,'LOGIN_LIMITER')});
 
 test('normal browser challenges do not exhaust the failed-password limit',async()=>{await load;const state=environment();let attempts=0;state.env.LOGIN_LIMITER.limit=async()=>{attempts++;return {success:false}};for(let i=0;i<20;i++)assert.equal((await handler.fetch(request('/demo.json'),state.env)).status,401);assert.equal(attempts,0);assert.equal((await handler.fetch(request('/',auth(username,'wrong')),state.env)).status,429);assert.equal(attempts,1)});
+
+test('deployment targets the Worker serving the canonical private site',()=>{
+ const config=JSON.parse(require('fs').readFileSync(require('path').join(__dirname,'../private-preview/wrangler.jsonc'),'utf8'));
+ const production=new URL('https://nilicad.smart-home-azhari.workers.dev');
+ assert.equal(config.name,production.hostname.split('.')[0],'Deploy and secret setup must target the linked nilicad Worker, not a second preview Worker');
+});
